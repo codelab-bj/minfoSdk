@@ -1,10 +1,17 @@
 import 'package:flutter/material.dart';
 import 'package:minfo_sdk/minfo_sdk.dart';
-import 'package:minfo_sdk/minfo_web_view.dart';
-import 'package:minfo_sdk/src/utils.dart' show ApiResult, MinfoAPIClient;
-import 'package:minfo_sdk/src/models.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-void main() {
+void main() async {
+  // Indispensable pour l'initialisation asynchrone avant runApp
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // 1. Initialisation globale
+  await MinfoSdk.instance.init(
+    clientId: 'VOTRE_CLIENT_ID',
+    apiKey: 'VOTRE_API_KEY',
+  );
+
   runApp(const MyApp());
 }
 
@@ -14,12 +21,8 @@ class MyApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Minfo SDK Example',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primaryColor: Colors.orange,
-        scaffoldBackgroundColor: Colors.white,
-      ),
+      theme: ThemeData(primarySwatch: Colors.orange),
       home: const MinfoExamplePage(),
     );
   }
@@ -31,135 +34,112 @@ class MinfoExamplePage extends StatefulWidget {
   @override
   State<MinfoExamplePage> createState() => _MinfoExamplePageState();
 }
+
 class _MinfoExamplePageState extends State<MinfoExamplePage> {
-  late final MinfoAPIClient _apiClient;
+  bool _isProcessing = false;
+  String _statusMessage = "Prêt à scanner";
 
-  bool _isAuthorized = true;
-  String? _campaignUrl;
+  /// Étape 1 : Demander la permission et lancer la détection audio
+  Future<void> _handleMinfoLink() async {
+    // Vérification des permissions (Requis pour iOS/Android réels)
+    final status = await Permission.microphone.request();
+    if (!status.isGranted) {
+      _showError("Permission micro nécessaire pour détecter l'AudioQR.");
+      return;
+    }
 
-  @override
-  void initState() {
-    super.initState();
+    setState(() {
+      _isProcessing = true;
+      _statusMessage = "Écoute du signal Minfo...";
+    });
 
-    // Initialisation du client API
-    _apiClient = MinfoAPIClient(
-      clientId: 'YOUR_CLIENT_ID',
-      apiKey: 'YOUR_API_KEY',
-      sdkVersion: '2.3.0',
-      baseUrl: 'https://c4.minfo.com',
+    // 2. Lancer la détection via le moteur AudioQR
+    final detectionResult = await MinfoSdk.instance.audioEngine.startDetection();
+
+    detectionResult.when(
+      success: (signal) {
+        setState(() => _statusMessage = "Signal détecté ! Connexion...");
+        _connectToMinfo(signal.signature);
+      },
+      failure: (error) {
+        setState(() => _isProcessing = false);
+        _showError("Erreur détection : ${error.message}");
+      },
     );
   }
 
-  /// Fonction pour lancer un connect request
-  Future<void> _performConnect() async {
+  /// Étape 2 : Envoyer la signature au serveur Minfo pour obtenir l'URL
+  Future<void> _connectToMinfo(String signature) async {
     try {
-      print('[MINFO] Starting Connect request...');
       final deviceContext = await DeviceContext.current();
-      print('[MINFO] DeviceContext: ${deviceContext.toJson()}');
 
       final request = ConnectRequest(
         requestingClientType: ClientType.sdkClient,
-        requestingClientId: 'YOUR_CLIENT_ID',
-        audioSignature: 'SIMULATED_AUDIO_SIGNATURE',
+        requestingClientId: 'VOTRE_CLIENT_ID',
+        audioSignature: signature,
         deviceContext: deviceContext,
         sdkVersion: '2.3.0',
-        engineVersion: '1.0.0-stub',
-        supportedContentTypes: [ContentType.webUrl],
-        activeFeatureFlags: ['audioqr_enabled'],
+        supportedContentTypes: [ContentType.webUrl], engineVersion: '', activeFeatureFlags: [],
       );
-      print('[MINFO] ConnectRequest prepared: ${request.toJson()}');
 
-      final ApiResult<ConnectResponse> result = await _apiClient.connect(request);
+      final result = await MinfoSdk.instance.apiClient.connect(request);
 
       result.when(
-        success: (connectResponse) {
-          print('[MINFO] Connect success!');
-          print('[MINFO] Outcome: ${connectResponse.outcome}');
-          print('[MINFO] Payload: ${connectResponse.payload}');
-          print('[MINFO] Message: ${connectResponse.message}');
-
-          if (connectResponse.outcome == Outcome.allow &&
-              connectResponse.payload?['url'] != null) {
-            setState(() {
-              _campaignUrl = connectResponse.payload!['url'] as String;
-            });
-            _openMinfoCampaign(_campaignUrl!);
+        success: (response) {
+          setState(() => _isProcessing = false);
+          if (response.outcome == Outcome.allow && response.payload?['url'] != null) {
+            _openWebView(response.payload!['url']);
           } else {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('Outcome: ${connectResponse.outcome}, no URL')),
-            );
+            _showError("Aucune campagne associée à ce signal.");
           }
         },
         failure: (error) {
-          print('[MINFO] Connect failed: $error');
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Connect failed: $error')),
-          );
+          setState(() => _isProcessing = false);
+          _showError("Échec de connexion API : $error");
         },
       );
-    } catch (e, stackTrace) {
-      print('[MINFO][EXCEPTION] $e');
-      print('[MINFO][STACKTRACE] $stackTrace');
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Exception: $e')),
-      );
+    } catch (e) {
+      setState(() => _isProcessing = false);
+      _showError("Exception : $e");
     }
   }
 
-
-
-  void _openMinfoCampaign(String url) {
+  void _openWebView(String url) {
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => MinfoWebView(campaignUrl: url),
-      ),
+      MaterialPageRoute(builder: (context) => MinfoWebView(campaignUrl: url)),
     );
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
+      appBar: AppBar(title: const Text("Minfo SDK Test")),
       body: Center(
-        child: _isAuthorized
-            ? Column(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Text(
-              'Minfo SDK Example',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 24),
+            if (_isProcessing) const CircularProgressIndicator(color: Colors.orange),
+            const SizedBox(height: 20),
+            Text(_statusMessage, style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 40),
             ElevatedButton.icon(
-              onPressed: _performConnect,
+              onPressed: _isProcessing ? null : _handleMinfoLink,
               icon: const Icon(Icons.mic),
-              label: const Text('Start Audio Connect'),
+              label: const Text("DÉTECTER AUDIO"),
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.orange,
                 foregroundColor: Colors.white,
-                padding:
-                const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
               ),
             ),
           ],
-        )
-            : _buildUnauthorizedView(),
-      ),
-    );
-  }
-
-  Widget _buildUnauthorizedView() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          Icon(Icons.error_outline, size: 64, color: Colors.orange),
-          SizedBox(height: 24),
-          Text('Access Denied',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold)),
-        ],
+        ),
       ),
     );
   }
 }
-

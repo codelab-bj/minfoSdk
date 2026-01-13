@@ -20,7 +20,7 @@ void main() {
   });
 
   test('getPlatformVersion', () async {
-    MinfoSdk minfoSdkPlugin = MinfoSdk();
+    MinfoSdk minfoSdkPlugin = MinfoSdk.instance;
     MockMinfoSdkPlatform fakePlatform = MockMinfoSdkPlatform();
     MinfoSdkPlatform.instance = fakePlatform;
 

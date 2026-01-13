@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 // Imports existants
+import '../minfo_sdk_platform_interface.dart';
 import '../minfo_web_view.dart';
 import 'models.dart';
 import 'audio_qr_engine.dart';
@@ -17,8 +18,12 @@ import 'logger.dart';
 import 'secure_storage.dart';
 
 
+
 /// Main entry point for the Minfo SDK.
 class MinfoSdk {
+  Future<String?> getPlatformVersion() {
+    return MinfoSdkPlatform.instance.getPlatformVersion();
+  }
   static final MinfoSdk instance = MinfoSdk._internal();
   MinfoSdk._internal();
 
