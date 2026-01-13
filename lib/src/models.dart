@@ -172,8 +172,11 @@ class ConnectResponse {
 
   factory ConnectResponse.fromJson(Map<String, dynamic> json) {
     return ConnectResponse(
-      requestId: json['requestId'] as String,
-      outcome: Outcome.fromString(json['outcome'] as String),
+      // CORRECTION : On gère le cas où requestId est absent ou null
+      requestId: (json['requestId'] ?? json['request_id'] ?? json['id'] ?? 'unknown').toString(),
+
+      // CORRECTION : On force une valeur par défaut pour l'outcome si null
+      outcome: Outcome.fromString(json['outcome'] as String? ?? 'error'),
       contentType: json['contentType'] != null
           ? ContentType.fromString(json['contentType'] as String)
           : null,
@@ -203,7 +206,8 @@ class MinfoConfig {
 
   factory MinfoConfig.fromJson(Map<String, dynamic> json) {
     return MinfoConfig(
-      configVersion: json['configVersion'] as String,
+      // CORRECTION : Valeurs par défaut pour éviter les crashs au démarrage
+      configVersion: json['configVersion'] as String? ?? '1.0.0',
       featureFlags: FeatureFlags.fromJson(
           json['featureFlags'] as Map<String, dynamic>),
       endpoints: Endpoints.fromJson(json['endpoints'] as Map<String, dynamic>),
@@ -284,7 +288,7 @@ class Endpoints {
   }
 
   factory Endpoints.defaults() => Endpoints(
-    connect: 'https://api.minfo.com/v1/connect',
+    connect: 'https://api.dev.minfo.com/api/minfo/campaignfromaudio',//'https://api.minfo.com/v1/connect',
     config: 'https://api.minfo.com/v1/config',
   );
 }

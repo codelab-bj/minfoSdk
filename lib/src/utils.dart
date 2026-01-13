@@ -2,6 +2,7 @@
 // Minfo SDK v2.3.0
 
 import 'dart:convert';
+import 'package:flutter/cupertino.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
 
@@ -178,7 +179,7 @@ class MinfoAPIClient {
     required this.clientId,
     required this.apiKey,
     required this.sdkVersion,
-    this.baseUrl = 'https://api.minfo.com',
+    this.baseUrl = 'https://api.dev.minfo.com',
   });
 
   Map<String, String> get _headers => {
@@ -200,32 +201,26 @@ class MinfoAPIClient {
     return MinfoConfig.fromJson(jsonDecode(response.body));
   }
 
+  // src/api_client.dart
+
   Future<ApiResult<ConnectResponse>> connect(ConnectRequest request) async {
     try {
-      final url = Uri.parse('$baseUrl/v1/connect');
+      final url = Uri.parse('$baseUrl/api/minfo/campaignfromaudio');
       final body = jsonEncode(request.toJson());
 
       final response = await _performRequestWithRetry(
             () => http.post(url, headers: _headers, body: body),
       );
 
-      // Parse response body regardless of status code
-      // Outcome is determined from JSON body, NOT HTTP status
+      // --- AJOUTE CE PRINT POUR VOIR LE MESSAGE D'ERREUR RÉEL ---
+      debugPrint('🔍 [DEBUG API] JSON RECU DU SERVEUR: ${response.body}');
+
       final connectResponse = ConnectResponse.fromJson(jsonDecode(response.body));
-
-      // Log with correlation ID
-      _logger.debug('Connect response', {
-        'requestId': connectResponse.requestId,
-        'httpStatus': response.statusCode.toString(),
-        'outcome': connectResponse.outcome.value,
-      });
-
       return ApiResult.success(connectResponse);
     } catch (e) {
       return ApiResult.failure(e is Exception ? e : Exception(e.toString()));
     }
   }
-
   Future<http.Response> _performRequestWithRetry(
       Future<http.Response> Function() request,
       ) async {

@@ -12,6 +12,8 @@ void main() async {
     await MinfoSdk.instance.init(
       clientId: 'VOTRE_CLIENT_ID',
       apiKey: 'VOTRE_API_KEY',
+      
+      //  /api/minfo/campaignfromaudio
     );
     debugPrint('✅ [MINFO] SDK Initialisé avec succès.');
   } catch (e) {
