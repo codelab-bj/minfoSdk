@@ -17,3 +17,10 @@ export 'src/audio_qr_engine.dart';
 // Utils (réexportés pour utilisation externe si besoin)
 // ========================================
 export 'src/utils.dart' show MinfoLogger, LogLevel;
+
+import 'minfo_sdk_platform_interface.dart';
+class MinfoSdk{
+  Future<String?> getPlatformVersion() {
+    return MinfoSdkPlatform.instance.getPlatformVersion();
+  }
+}

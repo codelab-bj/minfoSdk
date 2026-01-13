@@ -18,9 +18,9 @@ import 'secure_storage.dart';
 
 
 /// Main entry point for the Minfo SDK.
-class MinfoSDK {
-  static final MinfoSDK instance = MinfoSDK._internal();
-  MinfoSDK._internal();
+class MinfoSdk {
+  static final MinfoSdk instance = MinfoSdk._internal();
+  MinfoSdk._internal();
 
   // On stocke les dépendances ici
   late MinfoAPIClient apiClient;

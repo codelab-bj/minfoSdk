@@ -1,5 +1,5 @@
 // src/config_manager.dart
-// Minfo SDK v2.2.2
+// Minfo SDK v2.3.0
 
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
