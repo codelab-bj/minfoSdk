@@ -1,21 +1,34 @@
 import 'package:flutter/material.dart';
+import 'package:minfo_sdk/minfo_sdk.dart';
+import 'package:permission_handler/permission_handler.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  debugPrint('🚀 [MINFO] Démarrage de l\'application...');
+
+  try {
+    // 1. Initialisation globale
+    debugPrint('⚙️ [MINFO] Initialisation du SDK...');
+    await MinfoSdk.instance.init(
+      clientId: 'VOTRE_CLIENT_ID',
+      apiKey: 'VOTRE_API_KEY',
+    );
+    debugPrint('✅ [MINFO] SDK Initialisé avec succès.');
+  } catch (e) {
+    debugPrint('❌ [MINFO] Erreur critique lors de l\'initialisation: $e');
+  }
+
   runApp(const MyApp());
 }
-//simulation
+
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'Minfo SDK Example (MOCK)',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        primaryColor: Colors.orange,
-        scaffoldBackgroundColor: Colors.white,
-      ),
+      theme: ThemeData(primarySwatch: Colors.orange),
       home: const MinfoExamplePage(),
     );
   }
@@ -29,309 +42,128 @@ class MinfoExamplePage extends StatefulWidget {
 }
 
 class _MinfoExamplePageState extends State<MinfoExamplePage> {
-  bool _isAuthorized = true;
-  String? _campaignUrl;
-  bool _isConnecting = false;
+  bool _isProcessing = false;
+  String _statusMessage = "Prêt à scanner";
 
-  @override
-  void initState() {
-    super.initState();
-    print('🎭 [MOCK] App initialized');
+  /// Étape 1 : Demander la permission et lancer la détection audio
+  Future<void> _handleMinfoLink() async {
+    debugPrint('🎤 [ACTION] Bouton pressé : Vérification des permissions...');
+
+    final status = await Permission.microphone.request();
+    debugPrint('📡 [PERMISSION] Statut du micro : $status');
+
+    if (!status.isGranted) {
+      debugPrint('⚠️ [PERMISSION] Accès micro refusé par l\'utilisateur.');
+      _showError("Permission micro nécessaire pour détecter l'AudioQR.");
+      return;
+    }
+
+    setState(() {
+      _isProcessing = true;
+      _statusMessage = "Écoute du signal Minfo...";
+    });
+
+    debugPrint('👂 [MINFO] Démarrage de audioEngine.startDetection()...');
+    final detectionResult = await MinfoSdk.instance.audioEngine.startDetection();
+
+    detectionResult.when(
+      success: (signal) {
+        debugPrint('🎯 [DETECTION] Signal capturé ! Signature: ${signal.signature}');
+        debugPrint('📊 [DETECTION] Confiance: ${signal.confidence}');
+        setState(() => _statusMessage = "Signal détecté ! Connexion...");
+        _connectToMinfo(signal.signature);
+      },
+      failure: (error) {
+        debugPrint('🚨 [DETECTION] Échec : ${error.message}');
+        setState(() => _isProcessing = false);
+        _showError("Erreur détection : ${error.message}");
+      },
+    );
   }
 
-  /// Fonction MOCKÉE pour simuler un connect request
-  Future<void> _performConnect() async {
-    setState(() => _isConnecting = true);
-
+  /// Étape 2 : Envoyer la signature au serveur Minfo pour obtenir l'URL
+  Future<void> _connectToMinfo(String signature) async {
+    debugPrint('🌐 [API] Tentative de connexion au serveur Minfo...');
     try {
-      print('🎭 [MOCK] Starting Connect request...');
+      final deviceContext = await DeviceContext.current();
+      debugPrint('📱 [DEVICE] Context récupéré ');
 
-      // Simuler la collecte du DeviceContext
-      await Future.delayed(const Duration(milliseconds: 300));
-      print('🎭 [MOCK] DeviceContext: {osVersion: Android 13, deviceModel: Infinix X6528}');
+      final request = ConnectRequest(
+        requestingClientType: ClientType.sdkClient,
+        requestingClientId: 'VOTRE_CLIENT_ID',
+        audioSignature: signature,
+        deviceContext: deviceContext,
+        sdkVersion: '2.3.0',
+        supportedContentTypes: [ContentType.webUrl],
+        engineVersion: '1.0.0',
+        activeFeatureFlags: ['audioqr_enabled'],
+      );
 
-      // Simuler la préparation de la requête
-      await Future.delayed(const Duration(milliseconds: 200));
-      print('🎭 [MOCK] ConnectRequest prepared');
+      debugPrint('📤 [API] Envoi de la requête Connect...');
+      final result = await MinfoSdk.instance.apiClient.connect(request);
 
-      // Simuler la détection AudioQR
-      print('🎭 [MOCK] 🎤 Detecting AudioQR signal...');
-      await Future.delayed(const Duration(seconds: 2));
-      print('🎭 [MOCK] 📡 Signal detected!');
+      result.when(
+        success: (response) {
+          debugPrint('📥 [API] Réponse reçue. Outcome: ${response.outcome}');
+          setState(() => _isProcessing = false);
 
-      // Simuler l'appel API
-      print('🎭 [MOCK] 🌐 Calling /v1/connect...');
-      await Future.delayed(const Duration(milliseconds: 800));
-
-      // MOCK: Simuler une réponse "allow" avec URL de campagne
-      final mockResponse = {
-        'outcome': 'allow',
-        'requestId': 'mock-${DateTime.now().millisecondsSinceEpoch}',
-        'payload': {
-          'url': 'https://app.minfo.com'
+          if (response.outcome == Outcome.allow && response.payload?['url'] != null) {
+            String url = response.payload!['url'];
+            debugPrint('🔗 [API] URL de la campagne : $url');
+            _openWebView(url);
+          } else {
+            debugPrint('❓ [API] Pas d\'URL trouvée ou accès refusé.');
+            _showError("Aucune campagne associée à ce signal.");
+          }
         },
-        'message': 'Connect successful (MOCK)',
-      };
-
-      print('🎭 [MOCK] ✅ Connect success!');
-      print('🎭 [MOCK] Outcome: allow');
-      print('🎭 [MOCK] Payload: ${mockResponse['payload']}');
-
-      // Extraire l'URL et ouvrir la campagne
-      final url = (mockResponse['payload'] as Map)['url'] as String;
-
-      setState(() {
-        _campaignUrl = url;
-        _isConnecting = false;
-      });
-
-      _openMinfoCampaign(url);
-
-    } catch (e, stackTrace) {
-      print('🎭 [MOCK] ❌ Exception: $e');
-      print('🎭 [MOCK] StackTrace: $stackTrace');
-
-      setState(() => _isConnecting = false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Exception: $e')),
-        );
-      }
+        failure: (error) {
+          debugPrint('❌ [API] Erreur de communication : $error');
+          setState(() => _isProcessing = false);
+          _showError("Échec de connexion API : $error");
+        },
+      );
+    } catch (e) {
+      debugPrint('💥 [EXCEPTION] Une erreur est survenue : $e');
+      setState(() => _isProcessing = false);
+      _showError("Exception : $e");
     }
   }
 
-  void _openMinfoCampaign(String url) {
-    print('🎭 [MOCK] 🌐 Opening campaign: $url');
-
+  void _openWebView(String url) {
+    debugPrint('🖥️ [UI] Ouverture de la WebView Minfo...');
     Navigator.push(
       context,
-      MaterialPageRoute(
-        builder: (context) => MockMinfoWebView(campaignUrl: url),
-      ),
+      MaterialPageRoute(builder: (context) => MinfoWebView(campaignUrl: url)),
     );
+  }
+
+  void _showError(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Minfo SDK (MOCK)'),
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
-      ),
+      appBar: AppBar(title: const Text("Minfo SDK Test")),
       body: Center(
-        child: _isAuthorized
-            ? Column(
+        child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
-              Icons.campaign,
-              size: 80,
-              color: Colors.orange,
-            ),
-            const SizedBox(height: 24),
-            const Text(
-              'Minfo SDK Example',
-              style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            const Text(
-              '🎭 MOCK MODE',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.orange,
-                fontWeight: FontWeight.bold,
+            if (_isProcessing) const CircularProgressIndicator(color: Colors.orange),
+            const SizedBox(height: 20),
+            Text(_statusMessage, style: const TextStyle(fontSize: 16)),
+            const SizedBox(height: 40),
+            ElevatedButton.icon(
+              onPressed: _isProcessing ? null : _handleMinfoLink,
+              icon: const Icon(Icons.mic),
+              label: const Text("DÉTECTER AUDIO"),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.orange,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
               ),
             ),
-            const SizedBox(height: 32),
-
-            if (_isConnecting)
-              Column(
-                children: const [
-                  CircularProgressIndicator(color: Colors.orange),
-                  SizedBox(height: 16),
-                  Text('Detecting AudioQR signal...'),
-                ],
-              )
-            else
-              ElevatedButton.icon(
-                onPressed: _performConnect,
-                icon: const Icon(Icons.mic),
-                label: const Text('Start Audio Connect'),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.orange,
-                  foregroundColor: Colors.white,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 32,
-                    vertical: 20,
-                  ),
-                  textStyle: const TextStyle(fontSize: 18),
-                ),
-              ),
-
-            const SizedBox(height: 24),
-
-            if (_campaignUrl != null)
-              Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  children: [
-                    const Text(
-                      'Last campaign URL:',
-                      style: TextStyle(fontWeight: FontWeight.bold),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _campaignUrl!,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        color: Colors.blue,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                  ],
-                ),
-              ),
           ],
-        )
-            : _buildUnauthorizedView(),
-      ),
-    );
-  }
-
-  Widget _buildUnauthorizedView() {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          Icon(Icons.error_outline, size: 64, color: Colors.orange),
-          SizedBox(height: 24),
-          Text(
-            'Access Denied',
-            style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-/// Mock WebView pour afficher la campagne
-class MockMinfoWebView extends StatelessWidget {
-  final String campaignUrl;
-
-  const MockMinfoWebView({
-    Key? key,
-    required this.campaignUrl,
-  }) : super(key: key);
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Campaign (MOCK)'),
-        backgroundColor: Colors.orange,
-        foregroundColor: Colors.white,
-      ),
-      body: Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              const Icon(
-                Icons.web,
-                size: 100,
-                color: Colors.orange,
-              ),
-              const SizedBox(height: 32),
-              const Text(
-                '🎭 MOCK Campaign View',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              const SizedBox(height: 16),
-              const Text(
-                'This is where the real MinfoWebView would display the campaign.',
-                textAlign: TextAlign.center,
-                style: TextStyle(fontSize: 16),
-              ),
-              const SizedBox(height: 32),
-              Container(
-                padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.orange.shade50,
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(color: Colors.orange),
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Text(
-                      'Campaign URL:',
-                      style: TextStyle(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    SelectableText(
-                      campaignUrl,
-                      style: const TextStyle(
-                        color: Colors.blue,
-                        fontSize: 14,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              const SizedBox(height: 32),
-
-              // Simuler un contenu de campagne
-              Card(
-                elevation: 4,
-                child: Padding(
-                  padding: const EdgeInsets.all(16.0),
-                  child: Column(
-                    children: [
-                      const Text(
-                        'content',
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-
-                      ElevatedButton(
-                        onPressed: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('🎭 MOCK: Button clicked!'),
-                            ),
-                          );
-                        },
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.orange,
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 32,
-                            vertical: 16,
-                          ),
-                        ),
-                        child: const Text(
-                          'clic here',
-                          style: TextStyle(fontSize: 16),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
         ),
       ),
     );
