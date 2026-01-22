@@ -8,103 +8,68 @@ import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
-import android.os.Handler
-import android.os.Looper
-
 import com.cifrasoft.services.SoundCodeUltraCode
 import com.cifrasoft.services.SoundCodeUltraCodeListener
-import java.util.UUID
+import com.cifrasoft.services.SoundCodeUltraCodeSettings
 
 class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
+    // Constantes exactes du fichier de référence
+    private val DEFAULT_COUNTER_LENGTH: Int = 1
+    private val DEFAULT_COUNTER_INCREMENT: Int = 1
+    private val DEFAULT_COUNTER_START_VALUE: Int = 0
+    private val DEFAULT_DELAY_ADJUSTMENT: Float = +0.6f
+
+    // Channels
     private lateinit var channel: MethodChannel
     private lateinit var minfoChannel: MethodChannel
     private lateinit var context: Context
 
-    private var isDetecting = false
-    private var pendingResult: Result? = null
-    private val handler = Handler(Looper.getMainLooper())
-    private var timeoutRunnable: Runnable? = null
-    
-    // Thread-safe cleanup
-    private fun cleanupHandler() {
-        timeoutRunnable?.let { 
-            handler.removeCallbacks(it)
-            timeoutRunnable = null
-        }
-    }
+    // Constantes pour le channel audioCapture
+    private val CHANNEL = "com.gzone.campaign/audioCapture"
+    private val START_AUDIO_CAPTURE = "startAudioCapture"
+    private val STOP_AUDIO_CAPTURE = "stopAudioCapture"
+    private val ON_DETECTED_ID = "onDetectedId"
 
-    private val audioListener = object : SoundCodeUltraCodeListener {
-        override fun onDetectedSCId(codes: LongArray?) {
-            Log.d(TAG, "🎯 SIGNAL SOUNDCODE DÉTECTÉ ! Codes: ${codes?.contentToString()}")
-            processDetection("SoundCode", codes)
+    // Listener exact du fichier de référence
+    private val scuclistener = object : SoundCodeUltraCodeListener {
+        override fun onDetectedSCId(result: LongArray) {
+            Log.i(TAG, "=================================override fun onDetectedSCId")
+            Log.i(TAG, "detectedId id: " + java.lang.Long.toString(result[1]) + " / counter: " + result[2] + " / timestamp: " + "[" + java.lang.Float.toString((result[3] / 100).toFloat() / 10) + "] sec.")
+
+            // Créer un nouveau tableau avec l'identifiant de type pour les sons normaux
+            val resultWithType = longArrayOf(0L, result[1], result[2], result[3]) // 0 = Sons normaux
+
+            minfoChannel.invokeMethod(ON_DETECTED_ID, resultWithType)
         }
 
-        override fun onDetectedUCId(codes: LongArray?) {
-            Log.d(TAG, "🎯 SIGNAL ULTRACODE DÉTECTÉ ! Codes: ${codes?.contentToString()}")
-            processDetection("UltraCode", codes)
+        override fun onDetectedUCId(result: LongArray) {
+            Log.i(TAG, "=================================override fun onDetectedUCId")
+            Log.i(TAG, "detectedId id: " + java.lang.Long.toString(result[1]) + " / counter: " + result[2] + " / timestamp: " + "[" + java.lang.Float.toString((result[3] / 100).toFloat() / 10) + "] sec.")
+
+            // Créer un nouveau tableau avec l'identifiant de type pour les ultrasons
+            val resultWithType = longArrayOf(1L, result[1], result[2], result[3]) // 1 = Ultrasons
+
+            minfoChannel.invokeMethod(ON_DETECTED_ID, resultWithType)
         }
 
         override fun onAudioInitFailed() {
-            Log.e(TAG, "❌ Échec d'initialisation audio")
-            cancelTimeout()
-            val currentResult = pendingResult
-            pendingResult = null
-            isDetecting = false
-            handler.post {
-                currentResult?.error("AUDIO_INIT_FAILED", "Microphone initialization failed", null)
-            }
+            Log.i(TAG, "AUDIO SEARCH\nSERVICE_UNAVAILABLE!")
         }
     }
 
-    private fun processDetection(type: String, codes: LongArray?) {
-        Log.d(TAG, "🔄 Traitement détection: $type, codes: ${codes?.contentToString()}")
-        
-        if (codes != null && codes.isNotEmpty()) {
-            Log.d(TAG, "✅ Signal valide détecté!")
-            
-            val audioId = codes[0].toInt()
-            val soundType = if (type == "UltraCode") 1 else 0 // 0=Sons normaux, 1=Ultrasons
-            val counter = 1 // Compteur de détection
-            val timestamp = System.currentTimeMillis().toInt() / 1000 // Timestamp Unix
-            
-            // Format exact de l'app Minfo : [soundType, audioId, counter, timestamp]
-            val detectedData = intArrayOf(soundType, audioId, counter, timestamp)
-            
-            Log.d(TAG, "📤 Format app Minfo: $detectedData")
-            
-            handler.post {
-                // Envoyer sur le channel AudioQREngine
-                channel.invokeMethod("onSignalDetected", mapOf("type" to type, "codes" to codes.joinToString("_")))
-                
-                // Envoyer sur le channel app Minfo
-                minfoChannel.invokeMethod("onDetectedId", detectedData)
-                Log.d(TAG, "🏁 Signal envoyé sur les deux channels")
-            }
+    // Méthodes exactes du fichier de référence
+    fun startAudioCapture() {
+        SoundCodeUltraCode.instance(context).startSearch()
+        Log.i(TAG, "start recording ...")
+    }
 
-            if (pendingResult != null) {
-                cancelTimeout()
-                val resultData = HashMap<String, Any>()
-                resultData["signature"] = audioId.toString()
-                resultData["confidence"] = 0.98
-                resultData["signalId"] = java.util.UUID.randomUUID().toString()
-
-                val currentResult = pendingResult
-                pendingResult = null
-                isDetecting = false
-
-                handler.post {
-                    getAudioEngine().stopSearch()
-                    currentResult?.success(resultData)
-                }
-            }
-        } else {
-            Log.w(TAG, "⚠️ Signal détecté mais codes vides ou null")
-        }
+    fun stopAudioCapture() {
+        SoundCodeUltraCode.instance(context).stopSearch()
+        Log.i(TAG, "stopped recording")
     }
 
     companion object {
         private const val TAG = "MinfoSDK"
-        private const val DETECTION_TIMEOUT_MS = 45000L // 45 secondes pour plus de temps
     }
 
     private fun getAudioEngine(): SoundCodeUltraCode {
@@ -140,8 +105,33 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
         channel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.minfo_sdk/audioqr")
         channel.setMethodCallHandler(this)
         
-        // Channel pour format app Minfo (onDetectedId)
-        minfoChannel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.gzone.campaign/audioCapture")
+        // Channel exact du fichier de référence pour format app Minfo
+        minfoChannel = MethodChannel(flutterPluginBinding.binaryMessenger, CHANNEL)
+        minfoChannel.setMethodCallHandler { call, result ->
+            when (call.method) {
+                START_AUDIO_CAPTURE -> {
+                    SoundCodeUltraCode.instance(context).stopSearch()
+                    SoundCodeUltraCode.release()
+                    val scucs = SoundCodeUltraCodeSettings()
+                    scucs.counterLength = DEFAULT_COUNTER_LENGTH
+                    scucs.counterIncrement = DEFAULT_COUNTER_INCREMENT
+                    scucs.counterStartValue = DEFAULT_COUNTER_START_VALUE
+                    scucs.delayAdjustment = DEFAULT_DELAY_ADJUSTMENT
+                    SoundCodeUltraCode.instance(context).prepare(scucs, scuclistener, true)
+
+                    startAudioCapture()
+
+                    result.success(null)
+                }
+                STOP_AUDIO_CAPTURE -> {
+                    stopAudioCapture()
+                    result.success(null)
+                }
+                else -> {
+                    result.notImplemented()
+                }
+            }
+        }
         
         context = flutterPluginBinding.applicationContext
     }
@@ -178,7 +168,7 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
                     Log.d(TAG, "   - Settings classe: ${settings.javaClass.name}")
                     
                     // Test du listener
-                    Log.d(TAG, "   - Listener interface: ${audioListener.javaClass.interfaces.joinToString { it.name }}")
+                    Log.d(TAG, "   - Listener interface: ${scuclistener.javaClass.interfaces.joinToString { it.name }}")
                     
                     Log.d(TAG, "✅ Moteur Cifrasoft disponible: $version")
                     
@@ -204,126 +194,36 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
                 }
                 
                 try {
-                    isDetecting = true
-                    pendingResult = result
+                    // Utiliser exactement le même système que startAudioCapture
+                    SoundCodeUltraCode.instance(context).stopSearch()
+                    SoundCodeUltraCode.release()
+                    val scucs = SoundCodeUltraCodeSettings()
+                    scucs.counterLength = DEFAULT_COUNTER_LENGTH
+                    scucs.counterIncrement = DEFAULT_COUNTER_INCREMENT
+                    scucs.counterStartValue = DEFAULT_COUNTER_START_VALUE
+                    scucs.delayAdjustment = DEFAULT_DELAY_ADJUSTMENT
+                    SoundCodeUltraCode.instance(context).prepare(scucs, scuclistener, true)
 
-                    Log.d(TAG, "🔧 Configuration du moteur audio...")
+                    startAudioCapture()
                     
-                    // Configuration exacte de l'app Minfo officielle
-                    val settings = com.cifrasoft.services.SoundCodeUltraCodeSettings().apply {
-                        counterLength = 1
-                        counterIncrement = 1
-                        delayAdjustment = 0.3f  // Plus sensible
-                    }
-                    
-                    Log.d(TAG, "📋 Config Minfo officielle:")
-                    Log.d(TAG, "   - counterLength: ${settings.counterLength}")
-                    Log.d(TAG, "   - counterIncrement: ${settings.counterIncrement}")
-                    Log.d(TAG, "   - delayAdjustment: ${settings.delayAdjustment}")
-                    
-                    val listener = object : com.cifrasoft.services.SoundCodeUltraCodeListener {
-                        override fun onDetectedSCId(codes: LongArray) {
-                            val intCodes = codes.map { it.toInt() }.toIntArray()
-                            Log.d(TAG, "🎯 SIGNAL DÉTECTÉ ! Codes: ${intCodes.joinToString(",")}")
-                            handleDetection(0, intCodes)
-                        }
-                        
-                        override fun onDetectedUCId(codes: LongArray) {
-                            val intCodes = codes.map { it.toInt() }.toIntArray()
-                            Log.d(TAG, "🎯 SIGNAL UC DÉTECTÉ ! Codes: ${intCodes.joinToString(",")}")
-                            handleDetection(1, intCodes)
-                        }
-                        
-                        override fun onAudioInitFailed() {
-                            Log.e(TAG, "❌ Échec initialisation audio")
-                        }
-                    }
-                    
-                    // Préparer le moteur
-                    getAudioEngine().prepare(settings, listener, true)
-                    Log.d(TAG, "✅ Moteur préparé avec config Minfo")
-                    
-                    // Démarrer l'enregistrement et la recherche
-//                    getAudioEngine().startAudioRecord()
-                    getAudioEngine().startSearch()
-                    
-                    Log.d(TAG, "🎤 Détection démarrée - Écoute en continu...")
-                    
-//                    // Timeout de 30 secondes
-//                    timeoutRunnable = Runnable {
-//                        Log.d(TAG, "⏰ Timeout - Aucun signal détecté")
-//                        stopDetection()
-//                        pendingResult?.success(null)
-//                        pendingResult = null
-//                    }
-//                    handler.postDelayed(timeoutRunnable!!, 30000)
-                    
+                    result.success(null)
                 } catch (e: Exception) {
                     Log.e(TAG, "❌ Erreur critique: ${e.message}", e)
-                    isDetecting = false
-                    pendingResult = null
                     result.error("DETECTION_ERROR", e.message, null)
                 }
             }
             "stopDetection" -> {
-                stopDetection()
+                stopAudioCapture()
                 result.success(null)
             }
             else -> result.notImplemented()
         }
     }
 
-    private fun stopDetection() {
-        timeoutRunnable?.let { handler.removeCallbacks(it) }
-        try {
-            getAudioEngine().stopSearch()
-        } catch (e: Exception) { 
-            Log.w(TAG, "Error stopping audio engine: ${e.message}")
-        }
-        isDetecting = false
-        pendingResult = null
-    }
-
-    private fun handleDetection(type: Int, codes: IntArray) {
-        if (!isDetecting) return
-        
-        timeoutRunnable?.let { handler.removeCallbacks(it) }
-        
-        val audioId = codes.firstOrNull() ?: return
-        val soundType = 0 // 0=Sons normaux (SoundCode)
-        val counter = 1
-        val timestamp = System.currentTimeMillis() / 1000
-        
-        // Format exact de l'app Minfo : [soundType, audioId, counter, timestamp]
-        val detectedData = listOf(soundType, audioId, counter, timestamp)
-        
-        Log.d(TAG, "🔔 [MINFO FORMAT] Signal détecté ! Type: $soundType, ID: $audioId, Counter: $counter, Timestamp: $timestamp")
-        
-        handler.post {
-            // Envoyer sur le channel AudioQREngine
-            channel.invokeMethod("onSignalDetected", mapOf("type" to type, "codes" to codes.joinToString("_")))
-            
-            // Envoyer sur le channel app Minfo
-            minfoChannel.invokeMethod("onDetectedId", detectedData)
-            Log.d(TAG, "🏁 Signal envoyé sur les deux channels")
-        }
-        
-        val signal = mapOf(
-            "signature" to audioId.toString(),
-            "confidence" to 0.95,
-            "signalId" to java.util.UUID.randomUUID().toString()
-        )
-        
-        pendingResult?.success(signal)
-        stopDetection()
-    }
-
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
-        stopDetection()
+        stopAudioCapture()
+        SoundCodeUltraCode.release()
         channel.setMethodCallHandler(null)
-    }
-
-    private fun cancelTimeout() {
-        timeoutRunnable?.let { handler.removeCallbacks(it) }
+        minfoChannel.setMethodCallHandler(null)
     }
 }
