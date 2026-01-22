@@ -245,13 +245,22 @@ class _MinfoExamplePageState extends State<MinfoExamplePage> {
   }
 
   Future<void> _handleMinfoLink() async {
-    final status = await Permission.microphone.request();
-    if (!status.isGranted) {
+    // Demander les permissions nécessaires (comme dans l'app principale)
+    final micStatus = await Permission.microphone.request();
+    if (!micStatus.isGranted) {
       _showError("Permission micro nécessaire.");
       return;
     }
 
+    // Permission téléphone requise par Cifrasoft pour détecter les appels
+    final phoneStatus = await Permission.phone.request();
+    if (!phoneStatus.isGranted) {
+      _showError("Permission téléphone nécessaire pour la détection audio.");
+      return;
+    }
+
     print('🎤 [DEBUG] Permission micro accordée');
+    print('📱 [DEBUG] Permission téléphone accordée');
     print('🎤 [DEBUG] Démarrage détection...');
 
     setState(() {
