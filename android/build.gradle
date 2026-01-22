@@ -18,6 +18,9 @@ allprojects {
     repositories {
         google()
         mavenCentral()
+        flatDir {
+            dirs 'libs'
+        }
     }
 }
 
@@ -48,9 +51,9 @@ android {
     }
 
     dependencies {
-        // AudioQR native libraries (JAR extraits des AAR)
-        implementation files('src/main/libs/soundcode.jar')
-        implementation files('src/main/libs/audiorecord.jar')
+        // AudioQR native libraries (AAR complets comme dans l'app principale)
+        implementation(name: 'soundCode2UltraCodeLib-release', ext: 'aar')
+        implementation(name: 'audioRecordLib-release', ext: 'aar')
         
         testImplementation("org.jetbrains.kotlin:kotlin-test")
         testImplementation("org.mockito:mockito-core:5.0.0")
