@@ -86,6 +86,20 @@ class MinfoSdk {
   MinfoApiClient get apiClient => _apiClient;
   AudioQREngine get audioEngine => _audioEngine;
 
+  // Vérifier et configurer le listener si nécessaire
+  void _ensureListenerConfigured() {
+    // Vérifier si le listener est déjà configuré en testant si le channel a un handler
+    // Note: On ne peut pas vérifier directement, donc on le configure toujours
+    print('🔧 [MINFO_SDK] Vérification/Configuration du listener...');
+    _minfoChannel.setMethodCallHandler(_gererAppelsNatifsMinfo);
+    print('✅ [MINFO_SDK] Listener configuré/recongfiguré');
+  }
+
+  // Méthode publique pour configurer le listener manuellement
+  void configureListener() {
+    _ensureListenerConfigured();
+  }
+
   // Charger les clés existantes
   Future<bool> chargerCles() async {
     final success = await _apiClient.chargerClesApi();

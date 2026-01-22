@@ -146,9 +146,11 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
                         scucs.delayAdjustment = DEFAULT_DELAY_ADJUSTMENT
                         Log.i(TAG, "⚙️ [NATIF] Settings: counterLength=${scucs.counterLength}, counterIncrement=${scucs.counterIncrement}, counterStartValue=${scucs.counterStartValue}, delayAdjustment=${scucs.delayAdjustment}")
                         
-                        Log.i(TAG, "🔧 [NATIF] Préparation du moteur avec listener...")
-                        SoundCodeUltraCode.instance(context).prepare(scucs, scuclistener, true)
-                        Log.i(TAG, "✅ [NATIF] Moteur préparé")
+                    Log.i(TAG, "🔧 [NATIF] Préparation du moteur avec listener...")
+                    Log.i(TAG, "🔧 [NATIF] Listener attaché: ${scuclistener.javaClass.simpleName}")
+                    SoundCodeUltraCode.instance(context).prepare(scucs, scuclistener, true)
+                    Log.i(TAG, "✅ [NATIF] Moteur préparé avec listener")
+                    Log.i(TAG, "💡 [NATIF] INFO: Le listener écoute maintenant, un signal déclenchera onDetectedSCId ou onDetectedUCId")
 
                         startAudioCapture()
 
@@ -237,18 +239,28 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
                 try {
                     Log.i(TAG, "🔄 [NATIF] Utilisation du même système que startAudioCapture")
                     // Utiliser exactement le même système que startAudioCapture
+                    Log.i(TAG, "🛑 [NATIF] Arrêt et libération du moteur précédent...")
                     SoundCodeUltraCode.instance(context).stopSearch()
                     SoundCodeUltraCode.release()
+                    
+                    Log.i(TAG, "⚙️ [NATIF] Configuration des settings...")
                     val scucs = SoundCodeUltraCodeSettings()
                     scucs.counterLength = DEFAULT_COUNTER_LENGTH
                     scucs.counterIncrement = DEFAULT_COUNTER_INCREMENT
                     scucs.counterStartValue = DEFAULT_COUNTER_START_VALUE
                     scucs.delayAdjustment = DEFAULT_DELAY_ADJUSTMENT
+                    Log.i(TAG, "⚙️ [NATIF] Settings: counterLength=${scucs.counterLength}, counterIncrement=${scucs.counterIncrement}, counterStartValue=${scucs.counterStartValue}, delayAdjustment=${scucs.delayAdjustment}")
+                    
+                    Log.i(TAG, "🔧 [NATIF] Préparation du moteur avec listener...")
+                    Log.i(TAG, "🔧 [NATIF] Listener attaché: ${scuclistener.javaClass.simpleName}")
                     SoundCodeUltraCode.instance(context).prepare(scucs, scuclistener, true)
+                    Log.i(TAG, "✅ [NATIF] Moteur préparé avec listener")
+                    Log.i(TAG, "💡 [NATIF] INFO: Le listener écoute maintenant, un signal déclenchera onDetectedSCId ou onDetectedUCId")
 
                     startAudioCapture()
                     
                     Log.i(TAG, "✅ [NATIF] startDetection terminé avec succès")
+                    Log.i(TAG, "💡 [NATIF] INFO: En attente d'un signal audio...")
                     result.success(null)
                 } catch (e: Exception) {
                     Log.e(TAG, "❌ [NATIF] Erreur critique dans startDetection: ${e.message}", e)

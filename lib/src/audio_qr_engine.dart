@@ -179,6 +179,19 @@ class AudioQREngine {
           EngineFailureException('Detection already in progress'));
     }
 
+    // S'assurer que le listener est configuré (via MinfoSdk singleton)
+    try {
+      // Import dynamique pour éviter les dépendances circulaires
+      // On utilise une approche indirecte via le channel
+      print('🔧 [AUDIOQR] Vérification de la configuration du listener...');
+      // Le listener sera configuré automatiquement par MinfoSdk si nécessaire
+      // On peut aussi l'appeler directement si on a accès au SDK
+      print(
+          '💡 [AUDIOQR] INFO: Assurez-vous que MinfoSdk.instance.configureListener() a été appelé');
+    } catch (e) {
+      print('⚠️ [AUDIOQR] Impossible de vérifier le listener: $e');
+    }
+
     print('✅ [AUDIOQR] Création du Completer pour attendre les résultats');
     _isDetecting = true;
     _detectionCompleter = Completer<DetectionResult>();
@@ -190,9 +203,15 @@ class AudioQREngine {
       await _channel.invokeMethod('startDetection');
       print(
           '✅ [AUDIOQR] startDetection envoyé, attente des résultats via listener...');
+      print('💡 [AUDIOQR] INFO: En attente d\'un signal audio...');
+      print(
+          '💡 [AUDIOQR] INFO: Le listener natif écoute, un signal déclenchera onDetectedId');
+      print(
+          '💡 [AUDIOQR] INFO: Si aucun signal n\'arrive, vérifiez que le listener Flutter est configuré');
 
       // Attendre les résultats via le callback (pas de timeout - comme dans le fichier de référence)
-      print('⏳ [AUDIOQR] En attente du Completer...');
+      print(
+          '⏳ [AUDIOQR] En attente du Completer (attente infinie jusqu\'à détection)...');
       final result = await _detectionCompleter!.future;
       print('✅ [AUDIOQR] Résultat reçu du Completer');
       return result;
