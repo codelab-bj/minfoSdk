@@ -203,21 +203,17 @@ class MinfoSdk {
   }
 
   // Démarrer la capture audio manuellement - Système exact du fichier de référence
+  // Note: Le listener n'est PAS configuré ici - l'app doit gérer les événements
+  // via son propre setMethodCallHandler sur le channel 'com.gzone.campaign/audioCapture'
   Future<void> startAudioCapture() async {
     print('🚀 [MINFO_SDK] startAudioCapture() appelé manuellement');
     try {
-      // Créer le StreamController si nécessaire
-      _soundcodeController ??= StreamController<String>.broadcast();
-
-      // Configurer le listener pour recevoir les résultats
-      print('📡 [MINFO_SDK] Configuration du listener...');
-      _minfoChannel.setMethodCallHandler(_gererAppelsNatifsMinfo);
-      print('✅ [MINFO_SDK] Listener configuré');
-
       // Envoyer la commande au natif
       print('📤 [MINFO_SDK] Envoi de startAudioCapture vers le natif...');
       await _minfoChannel.invokeMethod('startAudioCapture');
       print('✅ [MINFO_SDK] Capture audio démarrée');
+      print(
+          '💡 [MINFO_SDK] Les événements onDetectedId seront reçus par le listener de l\'app');
     } catch (e) {
       print('❌ [MINFO_SDK] Erreur lors du démarrage de la capture: $e');
       rethrow;
