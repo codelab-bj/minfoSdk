@@ -23,3 +23,12 @@ plugins {
 }
 
 include ":app"
+
+// Ajouter le repository pour les AAR du SDK Minfo
+gradle.beforeProject { project ->
+    project.repositories {
+        flatDir {
+            dirs "${rootProject.projectDir}/../../android/libs"
+        }
+    }
+}
