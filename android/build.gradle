@@ -48,6 +48,10 @@ android {
     }
 
     dependencies {
+        // AudioQR native libraries (JAR extraits des AAR)
+        implementation files('src/main/libs/soundcode.jar')
+        implementation files('src/main/libs/audiorecord.jar')
+        
         testImplementation("org.jetbrains.kotlin:kotlin-test")
         testImplementation("org.mockito:mockito-core:5.0.0")
     }

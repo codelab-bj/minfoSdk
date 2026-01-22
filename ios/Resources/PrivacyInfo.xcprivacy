@@ -5,7 +5,16 @@
 	<key>NSPrivacyTrackingDomains</key>
 	<array/>
 	<key>NSPrivacyAccessedAPITypes</key>
-	<array/>
+	<array>
+		<dict>
+			<key>NSPrivacyAccessedAPIType</key>
+			<string>NSPrivacyAccessedAPICategoryMicrophone</string>
+			<key>NSPrivacyAccessedAPITypeReasons</key>
+			<array>
+				<string>Minfo SDK uses microphone to detect AudioQR signals for campaign linking</string>
+			</array>
+		</dict>
+	</array>
 	<key>NSPrivacyCollectedDataTypes</key>
 	<array/>
 	<key>NSPrivacyTracking</key>

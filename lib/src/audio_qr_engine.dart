@@ -2,9 +2,10 @@
 // Minfo SDK v2.3.0
 // Copyright (c) Minfo Limited. All rights reserved.
 //
-// STUB IMPLEMENTATION
+// NATIVE IMPLEMENTATION
 // This communicates with native AudioQR engines via platform channels.
 // The actual audio processing happens in native code (Swift/Kotlin).
+// Fallback stubs are commented out to force native library usage.
 
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
@@ -12,7 +13,7 @@ import 'package:uuid/uuid.dart';
 // MARK: - AudioQR Signal
 
 class AudioQRSignal {
-  /// Decoded signal signature (submitted to /v1/connect)
+  /// Decoded signal signature (submitted to campaignfromaudio API)
   final String signature;
 
   /// Detection confidence (0.0 - 1.0)
@@ -99,19 +100,27 @@ class EngineFailureException extends AudioQRException {
   String get message => 'Engine failure: $reason';
 }
 
+class NativeLibrariesUnavailableException extends AudioQRException {
+  final String details;
+  NativeLibrariesUnavailableException(this.details);
+
+  @override
+  String get message => 'Native libraries unavailable: $details';
+}
+
 // MARK: - AudioQR Engine
 
 /// AudioQR Engine that communicates with native implementations via platform channels.
 ///
 /// For production:
-/// - iOS: Uses MinfoAudioQREngine XCFramework
-/// - Android: Uses MinfoAudioQREngine AAR
+/// - iOS: Uses Cifrasoft SCSTB_LibraryU.a native library
+/// - Android: Uses Cifrasoft soundcode.jar + libscuc.so native libraries
 ///
-/// The stub implementation simulates detection for development.
+/// Fallback stubs are commented out to ensure native libraries are properly integrated.
 class AudioQREngine {
   final MethodChannel _channel;
 
-  String _version = '1.0.0-stub';
+  String _version = '1.0.0-native'; // Changed from 'stub' to 'native'
   bool _isAvailable = false;
   bool _isDetecting = false;
   final List<AudioQRSignal> _queuedSignals = [];
@@ -126,27 +135,26 @@ class AudioQREngine {
   /// Initialise the AudioQR engine.
   Future<bool> initialise() async {
     try {
-      // Try to initialise via platform channel
       final result = await _channel.invokeMethod<Map>('initialise');
       if (result != null) {
         _version = result['version'] as String? ?? _version;
         _isAvailable = result['available'] as bool? ?? false;
+        
+        if (!_isAvailable) {
+          final error = result['error'] as String?;
+          print('❌ AudioQR engine unavailable: $error');
+        }
+        
         return _isAvailable;
       }
-    } on MissingPluginException {
-      // Platform channel not implemented - use stub
-      _isAvailable = true; // Assume available for development
+      return false;
     } catch (e) {
-      // Log error but continue with stub
+      print('❌ AudioQR engine initialisation failed: $e');
+      return false;
     }
-
-    // Stub: Assume available for development
-    _isAvailable = true;
-    return true;
   }
 
   /// Start AudioQR detection.
-  /// No audio is stored, transmitted, or retained.
   Future<DetectionResult> startDetection() async {
     if (!_isAvailable) {
       return DetectionResult.failure(NotInitialisedException());
@@ -160,7 +168,6 @@ class AudioQREngine {
     _isDetecting = true;
 
     try {
-      // Try native implementation
       final result = await _channel.invokeMethod<Map>('startDetection');
       if (result != null) {
         final signal = AudioQRSignal(
@@ -172,30 +179,19 @@ class AudioQREngine {
         _isDetecting = false;
         return DetectionResult.success(signal);
       }
-    } on MissingPluginException {
-      // Platform channel not implemented - use stub
+      _isDetecting = false;
+      return DetectionResult.failure(EngineFailureException('Native detection returned null'));
     } catch (e) {
       _isDetecting = false;
+      
+      // Gestion spécifique des erreurs de libs natives
+      if (e.toString().contains('LIBS_UNAVAILABLE') || 
+          e.toString().contains('FRAMEWORK_UNAVAILABLE')) {
+        return DetectionResult.failure(NativeLibrariesUnavailableException(e.toString()));
+      }
+      
       return DetectionResult.failure(EngineFailureException(e.toString()));
     }
-
-    // STUB: Simulate detection
-    await Future.delayed(const Duration(seconds: 2));
-
-    if (!_isDetecting) {
-      return DetectionResult.failure(DetectionTimeoutException());
-    }
-
-    // Return mock signal
-    final mockSignal = AudioQRSignal(
-      signature: 'STUB_SIGNATURE_${_uuid.v4()}',
-      confidence: 0.95,
-      detectedAt: DateTime.now(),
-      signalId: _uuid.v4(),
-    );
-
-    _isDetecting = false;
-    return DetectionResult.success(mockSignal);
   }
 
   /// Stop any ongoing detection.
@@ -221,7 +217,7 @@ class AudioQREngine {
  *
  * iOS (Swift):
  * ```swift
- * let channel = FlutterMethodChannel(name: "com.minfo.sdk/audioqr", binaryMessenger: registrar.messenger())
+ * let channel = FlutterMethodChannel(name: "com.minfo_sdk/audioqr", binaryMessenger: registrar.messenger())
  * channel.setMethodCallHandler { call, result in
  *     switch call.method {
  *     case "initialise":
@@ -241,7 +237,7 @@ class AudioQREngine {
  *
  * Android (Kotlin):
  * ```kotlin
- * val channel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.minfo.sdk/audioqr")
+ * val channel = MethodChannel(flutterPluginBinding.binaryMessenger, "com.minfo_sdk/audioqr")
  * channel.setMethodCallHandler { call, result ->
  *     when (call.method) {
  *         "initialise" -> {

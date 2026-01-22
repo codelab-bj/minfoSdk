@@ -288,8 +288,8 @@ class Endpoints {
   }
 
   factory Endpoints.defaults() => Endpoints(
-    connect: 'https://api.dev.minfo.com/api/minfo/campaignfromaudio',//'https://api.minfo.com/v1/connect',
-    config: 'https://api.minfo.com/v1/config',
+    connect: 'https://api.dev.minfo.com/api/minfo/campaignfromaudio',
+    config: 'https://api.dev.minfo.com/v1/config',
   );
 }
 

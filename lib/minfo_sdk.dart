@@ -5,16 +5,21 @@
 library minfo_sdk;
 
 // ========================================
+// API Client & SDK Principal  
+// ========================================
+export 'src/minfo_sdk.dart';
+export 'src/api_client.dart';
+
+// ========================================
 // AudioQR (EXISTANT)
 // ========================================
-export 'src/minfo_sdk.dart' ;
-
 export 'src/models.dart';
 export 'src/audio_qr_engine.dart';
 
-
 // ========================================
-// Utils (réexportés pour utilisation externe si besoin)
+// Auth & Utils
 // ========================================
+export 'src/minfo_auth.dart';
+export 'src/minfo_environments.dart';
 export 'src/utils.dart' show MinfoLogger, LogLevel;
 export 'minfo_web_view.dart';
