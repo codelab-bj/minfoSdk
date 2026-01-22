@@ -31,9 +31,8 @@ class MinfoSdk {
   // Initialiser le SDK avec JWT
   Future<bool> initialiser(String tokenJwt) async {
     final success = await _apiClient.genererClesApi(tokenJwt);
-    if (success) {
-      await _demarrerDetectionAudio();
-    }
+    // NE PAS démarrer automatiquement la détection ici
+    // L'app doit d'abord demander les permissions puis appeler startAudioCapture()
     return success;
   }
 
@@ -103,9 +102,8 @@ class MinfoSdk {
   // Charger les clés existantes
   Future<bool> chargerCles() async {
     final success = await _apiClient.chargerClesApi();
-    if (success) {
-      await _demarrerDetectionAudio();
-    }
+    // NE PAS démarrer automatiquement la détection ici
+    // L'app doit d'abord demander les permissions puis appeler startAudioCapture()
     return success;
   }
 
@@ -208,6 +206,15 @@ class MinfoSdk {
   Future<void> startAudioCapture() async {
     print('🚀 [MINFO_SDK] startAudioCapture() appelé manuellement');
     try {
+      // Créer le StreamController si nécessaire
+      _soundcodeController ??= StreamController<String>.broadcast();
+
+      // Configurer le listener pour recevoir les résultats
+      print('📡 [MINFO_SDK] Configuration du listener...');
+      _minfoChannel.setMethodCallHandler(_gererAppelsNatifsMinfo);
+      print('✅ [MINFO_SDK] Listener configuré');
+
+      // Envoyer la commande au natif
       print('📤 [MINFO_SDK] Envoi de startAudioCapture vers le natif...');
       await _minfoChannel.invokeMethod('startAudioCapture');
       print('✅ [MINFO_SDK] Capture audio démarrée');

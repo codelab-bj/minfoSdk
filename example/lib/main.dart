@@ -39,8 +39,9 @@ class LoginPage extends StatefulWidget {
 class _LoginPageState extends State<LoginPage> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _urlController = TextEditingController(text: MinfoEnvironments.defaultUrl);
-  
+  final _urlController =
+      TextEditingController(text: MinfoEnvironments.defaultUrl);
+
   bool _isLoading = false;
   String _status = 'Entrez vos identifiants pour générer les clés API';
 
@@ -69,9 +70,15 @@ class _LoginPageState extends State<LoginPage> {
                       _urlController.text = url;
                     },
                     itemBuilder: (context) => [
-                      PopupMenuItem(value: MinfoEnvironments.prod, child: Text('Prod/Dev ✅')),
-                      PopupMenuItem(value: "https://api.staging.minfo.com", child: Text('Staging ❌')),
-                      PopupMenuItem(value: "http://192.168.100.55:8081", child: Text('Local ❌')),
+                      PopupMenuItem(
+                          value: MinfoEnvironments.prod,
+                          child: Text('Prod/Dev ✅')),
+                      PopupMenuItem(
+                          value: "https://api.staging.minfo.com",
+                          child: Text('Staging ❌')),
+                      PopupMenuItem(
+                          value: "http://192.168.100.55:8081",
+                          child: Text('Local ❌')),
                     ],
                   ),
                 ),
@@ -102,12 +109,14 @@ class _LoginPageState extends State<LoginPage> {
               ElevatedButton(
                 onPressed: _isLoading ? null : _generateKeysAndInit,
                 style: ElevatedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+                  shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(30)),
                 ),
-                child: _isLoading 
-                  ? const CircularProgressIndicator()
-                  : const Text("GÉNÉRER CLÉS & INITIALISER SDK"),
+                child: _isLoading
+                    ? const CircularProgressIndicator()
+                    : const Text("GÉNÉRER CLÉS & INITIALISER SDK"),
               ),
             ],
           ),
@@ -169,7 +178,8 @@ class _MinfoExamplePageState extends State<MinfoExamplePage> {
   bool _isProcessing = false;
   String _statusMessage = "SDK initialisé - Prêt à scanner";
 
-  static const MethodChannel _channel = MethodChannel('com.gzone.campaign/audioCapture');
+  static const MethodChannel _channel =
+      MethodChannel('com.gzone.campaign/audioCapture');
 
   @override
   void initState() {
@@ -178,47 +188,53 @@ class _MinfoExamplePageState extends State<MinfoExamplePage> {
     _channel.setMethodCallHandler((call) async {
       print('🔔 [DEBUG] Channel reçu: ${call.method}');
       print('📦 [DEBUG] Arguments bruts: ${call.arguments}');
-      
+
       if (call.method == "onDetectedId") {
         final List<dynamic> detectedData = call.arguments;
         print('✅ [DEBUG] Données détectées: $detectedData');
-        
+
         if (detectedData.length >= 4) {
           final int soundType = detectedData[0];
-          final int audioId = detectedData[1]; 
+          final int audioId = detectedData[1];
           final int counter = detectedData[2];
           final int timestamp = detectedData[3];
 
           print("🎯 [DEBUG] ID extrait: $audioId");
-          debugPrint("🔔 [MINFO FORMAT] Signal détecté ! Type: $soundType, ID: $audioId, Counter: $counter, Timestamp: $timestamp");
+          debugPrint(
+              "🔔 [MINFO FORMAT] Signal détecté ! Type: $soundType, ID: $audioId, Counter: $counter, Timestamp: $timestamp");
 
           setState(() {
-            _statusMessage = "✅ Signal ID $audioId détecté ! Analyse serveur...";
+            _statusMessage =
+                "✅ Signal ID $audioId détecté ! Analyse serveur...";
           });
 
           HapticFeedback.mediumImpact();
-          
+
           // Appeler l'API avec le format exact de l'app Minfo
-          _connectToMinfoV2(audioId, counter, timestamp, soundType == 0 ? "AUDIO_ID" : "ULTRASOUND");
+          _connectToMinfoV2(audioId, counter, timestamp,
+              soundType == 0 ? "AUDIO_ID" : "ULTRASOUND");
         }
       }
     });
   }
 
-  Future<void> _connectToMinfoV2(int audioId, int counter, int timestamp, String source) async {
+  Future<void> _connectToMinfoV2(
+      int audioId, int counter, int timestamp, String source) async {
     print('🌐 [API V2] AudioID reçu: $audioId');
-    print('🌐 [API V2] Counter: $counter, Timestamp: $timestamp, Source: $source');
-    
+    print(
+        '🌐 [API V2] Counter: $counter, Timestamp: $timestamp, Source: $source');
+
     if (audioId == 0 || audioId.toString().isEmpty) {
       print('❌ [API V2] AudioID invalide: $audioId');
       setState(() => _statusMessage = "❌ ID audio invalide");
       return;
     }
-    
+
     try {
-      final url = 'https://api.dev.minfo.com/api/minfo/campaign/v2?audio_id=$audioId&counter=$counter&timestamp=$timestamp&origin=FLUTTER_SDK&source=$source&lang=fr';
+      final url =
+          'https://api.dev.minfo.com/api/minfo/campaign/v2?audio_id=$audioId&counter=$counter&timestamp=$timestamp&origin=FLUTTER_SDK&source=$source&lang=fr';
       print('🔗 [API V2] URL construite: $url');
-      
+
       // Utiliser MinfoSdk pour l'API call
       final result = await MinfoSdk.instance.apiClient.connect({
         'audioSignature': audioId.toString(),
@@ -226,7 +242,7 @@ class _MinfoExamplePageState extends State<MinfoExamplePage> {
         'timestamp': timestamp,
         'source': source
       });
-      
+
       print('📡 [API V2] Résultat: $result');
 
       setState(() => _isProcessing = false);
@@ -268,21 +284,18 @@ class _MinfoExamplePageState extends State<MinfoExamplePage> {
       _statusMessage = "Écoute en cours...";
     });
 
-    final detectionResult = await MinfoSdk.instance.audioEngine.startDetection();
-
-    detectionResult.when(
-      success: (signal) {
-        print('🎯 [DETECTION] Signature reçue: ${signal.signature}');
-        debugPrint('🎯 [DETECTION] Signature: ${signal.signature}');
-      },
-      failure: (error) {
-        print('❌ [DETECTION] Erreur: ${error.message}');
-        setState(() {
-          _isProcessing = false;
-          _statusMessage = "❌ ${error.message}";
-        });
-      },
-    );
+    try {
+      // Démarrer la capture audio (initialise le moteur + démarre l'écoute)
+      await MinfoSdk.instance.startAudioCapture();
+      print('✅ [DEBUG] Capture audio démarrée - En attente de signal...');
+      // Le résultat arrive via le listener configuré dans initState()
+    } catch (e) {
+      print('❌ [DETECTION] Erreur: $e');
+      setState(() {
+        _isProcessing = false;
+        _statusMessage = "❌ $e";
+      });
+    }
 
     // Ajouter un timeout côté Flutter aussi
     Future.delayed(const Duration(seconds: 10), () {
@@ -325,7 +338,6 @@ class _MinfoExamplePageState extends State<MinfoExamplePage> {
               style: ElevatedButton.styleFrom(backgroundColor: Colors.red),
             ),
             const SizedBox(height: 20),
-            
             Icon(
               _isProcessing ? Icons.waves : Icons.mic_none,
               size: 80,
@@ -341,10 +353,13 @@ class _MinfoExamplePageState extends State<MinfoExamplePage> {
             ElevatedButton(
               onPressed: _isProcessing ? null : _handleMinfoLink,
               style: ElevatedButton.styleFrom(
-                padding: const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 40, vertical: 20),
+                shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(30)),
               ),
-              child: Text(_isProcessing ? "SCAN EN COURS..." : "DÉTECTER LE SON"),
+              child:
+                  Text(_isProcessing ? "SCAN EN COURS..." : "DÉTECTER LE SON"),
             ),
             if (_isProcessing)
               Padding(
