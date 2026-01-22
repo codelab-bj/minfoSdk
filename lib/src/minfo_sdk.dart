@@ -97,31 +97,44 @@ class MinfoSdk {
 
   // Démarrer la détection audio - Système exact du fichier de référence
   Future<void> _demarrerDetectionAudio() async {
+    print('🚀 [MINFO_SDK] _demarrerDetectionAudio() appelé');
     _soundcodeController = StreamController<String>.broadcast();
+    print('✅ [MINFO_SDK] StreamController créé');
 
     try {
       // Initialiser le moteur AudioQR (pour compatibilité)
+      print('⚙️ [MINFO_SDK] Initialisation du moteur AudioQR...');
       await _audioEngine.initialise();
+      print('✅ [MINFO_SDK] Moteur AudioQR initialisé');
 
       // Configurer le listener pour le channel exact du fichier de référence
+      print(
+          '📡 [MINFO_SDK] Configuration du listener pour le channel minfo...');
       _minfoChannel.setMethodCallHandler(_gererAppelsNatifsMinfo);
+      print('✅ [MINFO_SDK] Listener configuré');
 
       // Démarrer la capture audio avec le système exact
+      print('📤 [MINFO_SDK] Envoi de startAudioCapture vers le natif...');
       await _minfoChannel.invokeMethod('startAudioCapture');
-
-      print('✅ Moteur AudioQR initialisé et capture démarrée');
+      print('✅ [MINFO_SDK] startAudioCapture envoyé avec succès');
+      print('✅ [MINFO_SDK] Moteur AudioQR initialisé et capture démarrée');
     } catch (e) {
-      print('Erreur initialisation moteur AudioQR: $e');
+      print('❌ [MINFO_SDK] Erreur initialisation moteur AudioQR: $e');
     }
   }
 
   // Gérer les appels depuis le code natif - Format exact du fichier de référence
   Future<void> _gererAppelsNatifsMinfo(MethodCall call) async {
+    print('📥 [MINFO_SDK] Événement reçu depuis le natif: ${call.method}');
+    print('📦 [MINFO_SDK] Arguments bruts: ${call.arguments}');
+
     switch (call.method) {
       case 'onDetectedId':
+        print('🎯 [MINFO_SDK] onDetectedId reçu - Traitement...');
         // Format exact du fichier de référence : [type, result[1], result[2], result[3]]
         // type: 0 = Sons normaux (SoundCode), 1 = Ultrasons (UltraCode)
         final detectedData = call.arguments as List<dynamic>;
+        print('📊 [MINFO_SDK] Données détectées (format): $detectedData');
 
         if (detectedData.length >= 4) {
           final int soundType = detectedData[0] as int;
@@ -130,18 +143,29 @@ class MinfoSdk {
           final int timestamp = detectedData[3] as int;
 
           print(
-            '🔔 [MINFO FORMAT] Signal détecté ! Type: $soundType, ID: $audioId, Counter: $counter, Timestamp: $timestamp',
-          );
+              '🔔 [MINFO_SDK] Signal détecté ! Type: $soundType, ID: $audioId, Counter: $counter, Timestamp: $timestamp');
 
           // Transmettre à AudioQREngine pour startDetection()
+          print(
+              '📤 [MINFO_SDK] Transmission à AudioQREngine.handleDetectedId()...');
           _audioEngine.handleDetectedId(detectedData);
+          print('✅ [MINFO_SDK] Transmission à AudioQREngine terminée');
 
           // Convertir l'audioId en signature pour l'API
+          print('🌐 [MINFO_SDK] Génération du soundcode pour l\'API...');
           final signature = audioId.toString();
           final soundcode = await _apiClient.genererSoundcode(signature);
           if (soundcode != null) {
+            print('✅ [MINFO_SDK] Soundcode généré: $soundcode');
+            print('📤 [MINFO_SDK] Ajout au stream...');
             _soundcodeController?.add(soundcode);
+            print('✅ [MINFO_SDK] Ajouté au stream avec succès');
+          } else {
+            print('⚠️ [MINFO_SDK] Soundcode null, non ajouté au stream');
           }
+        } else {
+          print(
+              '❌ [MINFO_SDK] Format de données invalide, longueur: ${detectedData.length}');
         }
         break;
       case 'onSignalDetected':
@@ -168,22 +192,26 @@ class MinfoSdk {
 
   // Démarrer la capture audio manuellement - Système exact du fichier de référence
   Future<void> startAudioCapture() async {
+    print('🚀 [MINFO_SDK] startAudioCapture() appelé manuellement');
     try {
+      print('📤 [MINFO_SDK] Envoi de startAudioCapture vers le natif...');
       await _minfoChannel.invokeMethod('startAudioCapture');
-      print('✅ Capture audio démarrée');
+      print('✅ [MINFO_SDK] Capture audio démarrée');
     } catch (e) {
-      print('Erreur lors du démarrage de la capture: $e');
+      print('❌ [MINFO_SDK] Erreur lors du démarrage de la capture: $e');
       rethrow;
     }
   }
 
   // Arrêter la capture audio manuellement - Système exact du fichier de référence
   Future<void> stopAudioCapture() async {
+    print('⏹️ [MINFO_SDK] stopAudioCapture() appelé manuellement');
     try {
+      print('📤 [MINFO_SDK] Envoi de stopAudioCapture vers le natif...');
       await _minfoChannel.invokeMethod('stopAudioCapture');
-      print('✅ Capture audio arrêtée');
+      print('✅ [MINFO_SDK] Capture audio arrêtée');
     } catch (e) {
-      print('Erreur lors de l\'arrêt de la capture: $e');
+      print('❌ [MINFO_SDK] Erreur lors de l\'arrêt de la capture: $e');
       rethrow;
     }
   }

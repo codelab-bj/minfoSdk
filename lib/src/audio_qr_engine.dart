@@ -166,33 +166,38 @@ class AudioQREngine {
   /// Start AudioQR detection.
   /// Avec le système exact, les résultats arrivent via le listener onDetectedId
   Future<DetectionResult> startDetection() async {
+    print('🚀 [AUDIOQR] startDetection() appelé');
+
     if (!_isAvailable) {
+      print('❌ [AUDIOQR] Moteur non initialisé');
       return DetectionResult.failure(NotInitialisedException());
     }
 
     if (_isDetecting) {
+      print('⚠️ [AUDIOQR] Détection déjà en cours');
       return DetectionResult.failure(
           EngineFailureException('Detection already in progress'));
     }
 
+    print('✅ [AUDIOQR] Création du Completer pour attendre les résultats');
     _isDetecting = true;
     _detectionCompleter = Completer<DetectionResult>();
 
     try {
+      print('📤 [AUDIOQR] Envoi de startDetection vers le natif...');
       // Démarrer la détection (retourne null avec le système exact)
       // Les résultats arriveront via handleDetectedId() appelé par minfo_sdk.dart
       await _channel.invokeMethod('startDetection');
+      print(
+          '✅ [AUDIOQR] startDetection envoyé, attente des résultats via listener...');
 
-      // Attendre les résultats via le callback (timeout de 45 secondes)
-      return await _detectionCompleter!.future.timeout(
-        const Duration(seconds: 45),
-        onTimeout: () {
-          _isDetecting = false;
-          _detectionCompleter = null;
-          return DetectionResult.failure(DetectionTimeoutException());
-        },
-      );
+      // Attendre les résultats via le callback (pas de timeout - comme dans le fichier de référence)
+      print('⏳ [AUDIOQR] En attente du Completer...');
+      final result = await _detectionCompleter!.future;
+      print('✅ [AUDIOQR] Résultat reçu du Completer');
+      return result;
     } catch (e) {
+      print('❌ [AUDIOQR] Erreur dans startDetection: $e');
       _isDetecting = false;
       _detectionCompleter = null;
 
@@ -203,10 +208,6 @@ class AudioQREngine {
             NativeLibrariesUnavailableException(e.toString()));
       }
 
-      if (e is TimeoutException) {
-        return DetectionResult.failure(DetectionTimeoutException());
-      }
-
       return DetectionResult.failure(EngineFailureException(e.toString()));
     }
   }
@@ -214,46 +215,74 @@ class AudioQREngine {
   /// Gérer les détections reçues via onDetectedId
   /// Appelé par minfo_sdk.dart quand il reçoit onDetectedId
   void handleDetectedId(List<dynamic> detectedData) {
-    if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
-      try {
-        // Format exact du fichier de référence : [type, result[1], result[2], result[3]]
-        if (detectedData.length >= 4) {
-          final int audioId = detectedData[1] as int;
+    print('📥 [AUDIOQR] handleDetectedId() appelé avec: $detectedData');
 
-          // Créer le signal
-          final signal = AudioQRSignal(
-            signature: audioId.toString(),
-            confidence: 0.95, // Confiance par défaut
-            detectedAt: DateTime.now(),
-            signalId: _uuid.v4(),
-          );
+    if (_detectionCompleter == null) {
+      print('⚠️ [AUDIOQR] Aucun Completer en attente, détection non démarrée');
+      return;
+    }
 
-          _isDetecting = false;
-          _detectionCompleter!.complete(DetectionResult.success(signal));
-          _detectionCompleter = null;
-        }
-      } catch (e) {
+    if (_detectionCompleter!.isCompleted) {
+      print('⚠️ [AUDIOQR] Completer déjà complété, résultat ignoré');
+      return;
+    }
+
+    try {
+      // Format exact du fichier de référence : [type, result[1], result[2], result[3]]
+      if (detectedData.length >= 4) {
+        final int audioId = detectedData[1] as int;
+        print('🎯 [AUDIOQR] AudioId extrait: $audioId');
+
+        // Créer le signal
+        final signal = AudioQRSignal(
+          signature: audioId.toString(),
+          confidence: 0.95, // Confiance par défaut
+          detectedAt: DateTime.now(),
+          signalId: _uuid.v4(),
+        );
+        print(
+            '✅ [AUDIOQR] Signal créé: signature=${signal.signature}, signalId=${signal.signalId}');
+
         _isDetecting = false;
-        if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
-          _detectionCompleter!.complete(
-              DetectionResult.failure(EngineFailureException(e.toString())));
-          _detectionCompleter = null;
-        }
+        print('📤 [AUDIOQR] Complétion du Completer avec succès...');
+        _detectionCompleter!.complete(DetectionResult.success(signal));
+        _detectionCompleter = null;
+        print('✅ [AUDIOQR] Completer complété avec succès');
+      } else {
+        print(
+            '❌ [AUDIOQR] Format de données invalide, longueur: ${detectedData.length}');
+      }
+    } catch (e) {
+      print('❌ [AUDIOQR] Erreur dans handleDetectedId: $e');
+      _isDetecting = false;
+      if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
+        print('📤 [AUDIOQR] Complétion du Completer avec erreur...');
+        _detectionCompleter!.complete(
+            DetectionResult.failure(EngineFailureException(e.toString())));
+        _detectionCompleter = null;
+        print('✅ [AUDIOQR] Completer complété avec erreur');
       }
     }
   }
 
   /// Stop any ongoing detection.
   void stopDetection() {
+    print('⏹️ [AUDIOQR] stopDetection() appelé');
     _isDetecting = false;
     if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
+      print('📤 [AUDIOQR] Complétion du Completer avec arrêt...');
       _detectionCompleter!.complete(
           DetectionResult.failure(EngineFailureException('Detection stopped')));
       _detectionCompleter = null;
+      print('✅ [AUDIOQR] Completer complété avec arrêt');
     }
     try {
+      print('📤 [AUDIOQR] Envoi de stopDetection vers le natif...');
       _channel.invokeMethod('stopDetection');
-    } catch (_) {}
+      print('✅ [AUDIOQR] stopDetection envoyé');
+    } catch (e) {
+      print('❌ [AUDIOQR] Erreur dans stopDetection: $e');
+    }
   }
 
   /// Discard any queued signals.
