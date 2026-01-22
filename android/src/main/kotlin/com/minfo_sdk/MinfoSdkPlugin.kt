@@ -1,9 +1,12 @@
 package com.minfo_sdk
 
+import android.app.Activity
 import android.content.Context
 import android.util.Log
 import androidx.annotation.NonNull
 import io.flutter.embedding.engine.plugins.FlutterPlugin
+import io.flutter.embedding.engine.plugins.activity.ActivityAware
+import io.flutter.embedding.engine.plugins.activity.ActivityPluginBinding
 import io.flutter.plugin.common.MethodCall
 import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
@@ -12,7 +15,7 @@ import com.cifrasoft.services.SoundCodeUltraCode
 import com.cifrasoft.services.SoundCodeUltraCodeListener
 import com.cifrasoft.services.SoundCodeUltraCodeSettings
 
-class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
+class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler, ActivityAware {
     // Constantes exactes du fichier de référence
     private val DEFAULT_COUNTER_LENGTH: Int = 1
     private val DEFAULT_COUNTER_INCREMENT: Int = 1
@@ -23,6 +26,9 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
     private lateinit var channel: MethodChannel
     private lateinit var minfoChannel: MethodChannel
     private lateinit var context: Context
+    
+    // Activity context - CRUCIAL pour Cifrasoft
+    private var activity: Activity? = null
 
     // Constantes pour le channel audioCapture
     private val CHANNEL = "com.gzone.campaign/audioCapture"
@@ -67,8 +73,9 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
     fun startAudioCapture() {
         Log.i(TAG, "🚀 [NATIF] Démarrage startAudioCapture()...")
         try {
-            Log.i(TAG, "🎤 [NATIF] Appel startSearch()...")
-            SoundCodeUltraCode.instance(context).startSearch()
+            val ctx = getActivityContext()
+            Log.i(TAG, "🎤 [NATIF] Appel startSearch() avec contexte: ${ctx.javaClass.simpleName}")
+            SoundCodeUltraCode.instance(ctx).startSearch()
             Log.i(TAG, "✅ [NATIF] startSearch() appelé avec succès")
             Log.i(TAG, "✅ [NATIF] start recording ...")
         } catch (e: Exception) {
@@ -80,8 +87,9 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
     fun stopAudioCapture() {
         Log.i(TAG, "⏹️ [NATIF] Arrêt stopAudioCapture()...")
         try {
-            Log.i(TAG, "🛑 [NATIF] Appel stopSearch()...")
-            SoundCodeUltraCode.instance(context).stopSearch()
+            val ctx = getActivityContext()
+            Log.i(TAG, "🛑 [NATIF] Appel stopSearch() avec contexte: ${ctx.javaClass.simpleName}")
+            SoundCodeUltraCode.instance(ctx).stopSearch()
             Log.i(TAG, "✅ [NATIF] stopSearch() appelé avec succès")
             Log.i(TAG, "✅ [NATIF] stopped recording")
         } catch (e: Exception) {
@@ -92,10 +100,39 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
     companion object {
         private const val TAG = "MinfoSDK"
     }
+    
+    // Obtenir le contexte approprié (Activity si disponible, sinon applicationContext)
+    private fun getActivityContext(): Context {
+        return activity ?: context
+    }
+    
+    // ActivityAware - Attachement à l'activité
+    override fun onAttachedToActivity(binding: ActivityPluginBinding) {
+        Log.i(TAG, "🔗 [NATIF] onAttachedToActivity - Activity attachée")
+        activity = binding.activity
+        Log.i(TAG, "✅ [NATIF] Activity context disponible: ${activity?.javaClass?.simpleName}")
+    }
+    
+    override fun onDetachedFromActivityForConfigChanges() {
+        Log.i(TAG, "🔄 [NATIF] onDetachedFromActivityForConfigChanges")
+        activity = null
+    }
+    
+    override fun onReattachedToActivityForConfigChanges(binding: ActivityPluginBinding) {
+        Log.i(TAG, "🔗 [NATIF] onReattachedToActivityForConfigChanges")
+        activity = binding.activity
+    }
+    
+    override fun onDetachedFromActivity() {
+        Log.i(TAG, "🔌 [NATIF] onDetachedFromActivity - Activity détachée")
+        activity = null
+    }
 
     private fun getAudioEngine(): SoundCodeUltraCode {
         try {
-            return SoundCodeUltraCode.instance(context)
+            val ctx = getActivityContext()
+            Log.d(TAG, "🔧 [NATIF] getAudioEngine() avec contexte: ${ctx.javaClass.simpleName}")
+            return SoundCodeUltraCode.instance(ctx)
         } catch (e: Exception) {
             Log.e(TAG, "❌ Cifrasoft libs non disponibles: ${e.message}")
             throw RuntimeException("Cifrasoft SoundCode library not available: ${e.message}")
@@ -104,8 +141,10 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
 
     private fun verifyCifrasoftLibs(): Boolean {
         return try {
+            val ctx = getActivityContext()
+            Log.d(TAG, "🔍 [NATIF] verifyCifrasoftLibs() avec contexte: ${ctx.javaClass.simpleName}")
             // Test de création d'instance
-            val engine = SoundCodeUltraCode.instance(context)
+            val engine = SoundCodeUltraCode.instance(ctx)
             val settings = com.cifrasoft.services.SoundCodeUltraCodeSettings()
             Log.d(TAG, "✅ Cifrasoft libs disponibles")
             true
@@ -134,8 +173,11 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
                 START_AUDIO_CAPTURE -> {
                     Log.i(TAG, "🚀 [NATIF] START_AUDIO_CAPTURE - Début")
                     try {
+                        val ctx = getActivityContext()
+                        Log.i(TAG, "🔗 [NATIF] Contexte utilisé: ${ctx.javaClass.simpleName} (Activity: ${activity != null})")
+                        
                         Log.i(TAG, "🔄 [NATIF] Arrêt et libération du moteur précédent...")
-                        SoundCodeUltraCode.instance(context).stopSearch()
+                        SoundCodeUltraCode.instance(ctx).stopSearch()
                         SoundCodeUltraCode.release()
                         
                         Log.i(TAG, "⚙️ [NATIF] Configuration des settings...")
@@ -146,11 +188,11 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
                         scucs.delayAdjustment = DEFAULT_DELAY_ADJUSTMENT
                         Log.i(TAG, "⚙️ [NATIF] Settings: counterLength=${scucs.counterLength}, counterIncrement=${scucs.counterIncrement}, counterStartValue=${scucs.counterStartValue}, delayAdjustment=${scucs.delayAdjustment}")
                         
-                    Log.i(TAG, "🔧 [NATIF] Préparation du moteur avec listener...")
-                    Log.i(TAG, "🔧 [NATIF] Listener attaché: ${scuclistener.javaClass.simpleName}")
-                    SoundCodeUltraCode.instance(context).prepare(scucs, scuclistener, true)
-                    Log.i(TAG, "✅ [NATIF] Moteur préparé avec listener")
-                    Log.i(TAG, "💡 [NATIF] INFO: Le listener écoute maintenant, un signal déclenchera onDetectedSCId ou onDetectedUCId")
+                        Log.i(TAG, "🔧 [NATIF] Préparation du moteur avec listener...")
+                        Log.i(TAG, "🔧 [NATIF] Listener attaché: ${scuclistener.javaClass.simpleName}")
+                        SoundCodeUltraCode.instance(ctx).prepare(scucs, scuclistener, true)
+                        Log.i(TAG, "✅ [NATIF] Moteur préparé avec listener")
+                        Log.i(TAG, "💡 [NATIF] INFO: Le listener écoute maintenant, un signal déclenchera onDetectedSCId ou onDetectedUCId")
 
                         startAudioCapture()
 
@@ -237,10 +279,13 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
                 }
                 
                 try {
+                    val ctx = getActivityContext()
+                    Log.i(TAG, "🔗 [NATIF] Contexte utilisé: ${ctx.javaClass.simpleName} (Activity: ${activity != null})")
+                    
                     Log.i(TAG, "🔄 [NATIF] Utilisation du même système que startAudioCapture")
                     // Utiliser exactement le même système que startAudioCapture
                     Log.i(TAG, "🛑 [NATIF] Arrêt et libération du moteur précédent...")
-                    SoundCodeUltraCode.instance(context).stopSearch()
+                    SoundCodeUltraCode.instance(ctx).stopSearch()
                     SoundCodeUltraCode.release()
                     
                     Log.i(TAG, "⚙️ [NATIF] Configuration des settings...")
@@ -253,7 +298,7 @@ class MinfoSdkPlugin: FlutterPlugin, MethodCallHandler {
                     
                     Log.i(TAG, "🔧 [NATIF] Préparation du moteur avec listener...")
                     Log.i(TAG, "🔧 [NATIF] Listener attaché: ${scuclistener.javaClass.simpleName}")
-                    SoundCodeUltraCode.instance(context).prepare(scucs, scuclistener, true)
+                    SoundCodeUltraCode.instance(ctx).prepare(scucs, scuclistener, true)
                     Log.i(TAG, "✅ [NATIF] Moteur préparé avec listener")
                     Log.i(TAG, "💡 [NATIF] INFO: Le listener écoute maintenant, un signal déclenchera onDetectedSCId ou onDetectedUCId")
 
