@@ -7,6 +7,7 @@
 // The actual audio processing happens in native code (Swift/Kotlin).
 // Fallback stubs are commented out to force native library usage.
 
+import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
 
@@ -119,6 +120,7 @@ class NativeLibrariesUnavailableException extends AudioQRException {
 /// Fallback stubs are commented out to ensure native libraries are properly integrated.
 class AudioQREngine {
   final MethodChannel _channel;
+  final MethodChannel? _minfoChannel;
 
   String _version = '1.0.0-native'; // Changed from 'stub' to 'native'
   bool _isAvailable = false;
@@ -127,7 +129,14 @@ class AudioQREngine {
 
   final _uuid = const Uuid();
 
-  AudioQREngine({required MethodChannel channel}) : _channel = channel;
+  // Pour attendre les résultats du listener
+  Completer<DetectionResult>? _detectionCompleter;
+
+  AudioQREngine({
+    required MethodChannel channel,
+    MethodChannel? minfoChannel,
+  })  : _channel = channel,
+        _minfoChannel = minfoChannel;
 
   String get version => _version;
   bool get isAvailable => _isAvailable;
@@ -139,12 +148,12 @@ class AudioQREngine {
       if (result != null) {
         _version = result['version'] as String? ?? _version;
         _isAvailable = result['available'] as bool? ?? false;
-        
+
         if (!_isAvailable) {
           final error = result['error'] as String?;
           print('❌ AudioQR engine unavailable: $error');
         }
-        
+
         return _isAvailable;
       }
       return false;
@@ -155,6 +164,7 @@ class AudioQREngine {
   }
 
   /// Start AudioQR detection.
+  /// Avec le système exact, les résultats arrivent via le listener onDetectedId
   Future<DetectionResult> startDetection() async {
     if (!_isAvailable) {
       return DetectionResult.failure(NotInitialisedException());
@@ -166,37 +176,81 @@ class AudioQREngine {
     }
 
     _isDetecting = true;
+    _detectionCompleter = Completer<DetectionResult>();
 
     try {
-      final result = await _channel.invokeMethod<Map>('startDetection');
-      if (result != null) {
-        final signal = AudioQRSignal(
-          signature: result['signature'] as String,
-          confidence: (result['confidence'] as num).toDouble(),
-          detectedAt: DateTime.now(),
-          signalId: result['signalId'] as String,
-        );
-        _isDetecting = false;
-        return DetectionResult.success(signal);
-      }
-      _isDetecting = false;
-      return DetectionResult.failure(EngineFailureException('Native detection returned null'));
+      // Démarrer la détection (retourne null avec le système exact)
+      // Les résultats arriveront via handleDetectedId() appelé par minfo_sdk.dart
+      await _channel.invokeMethod('startDetection');
+
+      // Attendre les résultats via le callback (timeout de 45 secondes)
+      return await _detectionCompleter!.future.timeout(
+        const Duration(seconds: 45),
+        onTimeout: () {
+          _isDetecting = false;
+          _detectionCompleter = null;
+          return DetectionResult.failure(DetectionTimeoutException());
+        },
+      );
     } catch (e) {
       _isDetecting = false;
-      
+      _detectionCompleter = null;
+
       // Gestion spécifique des erreurs de libs natives
-      if (e.toString().contains('LIBS_UNAVAILABLE') || 
+      if (e.toString().contains('LIBS_UNAVAILABLE') ||
           e.toString().contains('FRAMEWORK_UNAVAILABLE')) {
-        return DetectionResult.failure(NativeLibrariesUnavailableException(e.toString()));
+        return DetectionResult.failure(
+            NativeLibrariesUnavailableException(e.toString()));
       }
-      
+
+      if (e is TimeoutException) {
+        return DetectionResult.failure(DetectionTimeoutException());
+      }
+
       return DetectionResult.failure(EngineFailureException(e.toString()));
+    }
+  }
+
+  /// Gérer les détections reçues via onDetectedId
+  /// Appelé par minfo_sdk.dart quand il reçoit onDetectedId
+  void handleDetectedId(List<dynamic> detectedData) {
+    if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
+      try {
+        // Format exact du fichier de référence : [type, result[1], result[2], result[3]]
+        if (detectedData.length >= 4) {
+          final int audioId = detectedData[1] as int;
+
+          // Créer le signal
+          final signal = AudioQRSignal(
+            signature: audioId.toString(),
+            confidence: 0.95, // Confiance par défaut
+            detectedAt: DateTime.now(),
+            signalId: _uuid.v4(),
+          );
+
+          _isDetecting = false;
+          _detectionCompleter!.complete(DetectionResult.success(signal));
+          _detectionCompleter = null;
+        }
+      } catch (e) {
+        _isDetecting = false;
+        if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
+          _detectionCompleter!.complete(
+              DetectionResult.failure(EngineFailureException(e.toString())));
+          _detectionCompleter = null;
+        }
+      }
     }
   }
 
   /// Stop any ongoing detection.
   void stopDetection() {
     _isDetecting = false;
+    if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
+      _detectionCompleter!.complete(
+          DetectionResult.failure(EngineFailureException('Detection stopped')));
+      _detectionCompleter = null;
+    }
     try {
       _channel.invokeMethod('stopDetection');
     } catch (_) {}

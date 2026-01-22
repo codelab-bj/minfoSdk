@@ -18,7 +18,10 @@ class MinfoSdk {
   static final MinfoSdk _instance = MinfoSdk._internal();
   factory MinfoSdk() => _instance;
   MinfoSdk._internal() {
-    _audioEngine = AudioQREngine(channel: _channel);
+    _audioEngine = AudioQREngine(
+      channel: _channel,
+      minfoChannel: _minfoChannel,
+    );
   }
   static MinfoSdk get instance => _instance;
 
@@ -129,6 +132,9 @@ class MinfoSdk {
           print(
             '🔔 [MINFO FORMAT] Signal détecté ! Type: $soundType, ID: $audioId, Counter: $counter, Timestamp: $timestamp',
           );
+
+          // Transmettre à AudioQREngine pour startDetection()
+          _audioEngine.handleDetectedId(detectedData);
 
           // Convertir l'audioId en signature pour l'API
           final signature = audioId.toString();
