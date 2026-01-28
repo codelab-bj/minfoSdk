@@ -57,14 +57,45 @@ class MinfoSdk {
     return false;
   }
 
-  // Login et génération de clés
+  // Login et génération de clés avec cache
   Future<Map<String, String>?> loginAndGenerateKeys(
     String email,
     String password, {
     String? baseUrl,
+    bool forceRegenerate = false,
   }) async {
     final auth = MinfoAuth(baseUrl: baseUrl ?? 'https://api.dev.minfo.com');
-    return await auth.getApiKeys(email, password);
+    return await auth.getApiKeys(email, password, forceRegenerate: forceRegenerate);
+  }
+
+  // Récupérer les clés stockées sans login
+  Future<Map<String, String>?> getStoredApiKeys() async {
+    final auth = MinfoAuth();
+    return await auth.getStoredApiKeys();
+  }
+
+  // Initialiser avec des clés existantes (pour éviter la régénération)
+  Future<void> initializeWithKeys(String publicKey, String privateKey) async {
+    final auth = MinfoAuth();
+    await auth.storeApiKeys(publicKey, privateKey);
+    print('✅ [SDK] Clés initialisées et stockées');
+  }
+
+  // S'assurer que des clés valides existent (avec clés par défaut si nécessaire)
+  Future<Map<String, String>?> ensureApiKeys({
+    String? defaultPublicKey,
+    String? defaultPrivateKey,
+  }) async {
+    final auth = MinfoAuth();
+    return await auth.ensureApiKeys(
+      defaultPublicKey: defaultPublicKey,
+      defaultPrivateKey: defaultPrivateKey,
+    );
+  }
+
+  // Forcer la régénération des clés
+  Future<Map<String, String>?> regenerateApiKeys(String email, String password, {String? baseUrl}) async {
+    return await loginAndGenerateKeys(email, password, baseUrl: baseUrl, forceRegenerate: true);
   }
 
   // Générer les clés API (méthode publique selon documentation)

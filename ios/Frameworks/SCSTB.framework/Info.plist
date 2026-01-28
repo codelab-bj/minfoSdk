@@ -1,16 +1,22 @@
-CFBundleDevelopmentRegion
-en
-CFBundleExecutable
-SCSTB
-CFBundleIdentifier
-com.cifrasoft.SCSTB
-CFBundleInfoDictionaryVersion
-6.0
-CFBundleName
-SCSTB
-CFBundlePackageType
-FMWK
-CFBundleShortVersionString
-1.0
-CFBundleVersion
-1
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>CFBundleDevelopmentRegion</key>
+	<string>en</string>
+	<key>CFBundleExecutable</key>
+	<string>SCSTB</string>
+	<key>CFBundleIdentifier</key>
+	<string>com.cifrasoft.SCSTB</string>
+	<key>CFBundleInfoDictionaryVersion</key>
+	<string>6.0</string>
+	<key>CFBundleName</key>
+	<string>SCSTB</string>
+	<key>CFBundlePackageType</key>
+	<string>FMWK</string>
+	<key>CFBundleShortVersionString</key>
+	<string>1.0</string>
+	<key>CFBundleVersion</key>
+	<string>1</string>
+</dict>
+</plist>

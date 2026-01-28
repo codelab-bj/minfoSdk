@@ -1,14 +1,18 @@
-# Uncomment this line to define a global platform for your project
-# platform :ios, '12.0'
+# Spécifiez explicitement le projet et le workspace
+def setup_permissions(permissions)
+  Array(permissions).each do |permission|
+    case permission
+    when 'microphone'
+      ENV['PERMISSION_MICROPHONE'] = '1'
+    end
+  end
+end
+project 'Runner.xcodeproj'
+workspace 'Runner.xcworkspace'
 
-# CocoaPods analytics sends network stats synchronously affecting flutter build latency.
+platform :ios, '12.0'
+
 ENV['COCOAPODS_DISABLE_STATS'] = 'true'
-
-project 'Runner', {
-  'Debug' => :debug,
-  'Profile' => :release,
-  'Release' => :release,
-}
 
 def flutter_root
   generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
@@ -31,14 +35,37 @@ target 'Runner' do
   use_frameworks!
   use_modular_headers!
 
+  setup_permissions([
+    'microphone'
+  ])
+
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
-  target 'RunnerTests' do
-    inherit! :search_paths
-  end
 end
 
 post_install do |installer|
   installer.pods_project.targets.each do |target|
     flutter_additional_ios_build_settings(target)
+
+    target.build_configurations.each do |config|
+      # 1. Force iOS 12.0 pour tout le monde
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '12.0'
+
+      # 2. ACTIVE LA PERMISSION MICROPHONE (Crucial pour iOS)
+      config.build_settings['GCC_PREPROCESSOR_DEFINITIONS'] ||= [
+        '$(inherited)',
+        'PERMISSION_MICROPHONE=1'
+      ]
+    end
+
+    # Configuration spécifique Cifrasoft
+    if target.name == 'Runner'
+      target.build_configurations.each do |config|
+        config.build_settings['OTHER_LDFLAGS'] ||= []
+        config.build_settings['OTHER_LDFLAGS'] << '-force_load'
+        config.build_settings['OTHER_LDFLAGS'] << '$(SRCROOT)/SCSTB_LibraryU.a'
+        config.build_settings['HEADER_SEARCH_PATHS'] ||= []
+        config.build_settings['HEADER_SEARCH_PATHS'] << '$(SRCROOT)'
+      end
+    end
   end
 end

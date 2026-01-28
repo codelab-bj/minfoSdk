@@ -10,9 +10,8 @@ Minfo SDK with native AudioQR detection using Cifrasoft libraries.
   s.author           = { 'Minfo' => 'contact@minfo.com' }
   s.source           = { :path => '.' }
   
-  s.source_files = 'Classes/**/*', 'Frameworks/*.h'
-  s.public_header_files = 'Frameworks/*.h'
-  s.vendored_libraries = 'Frameworks/SCSTB_LibraryU.a'
+  s.source_files = 'Classes/**/*'
+  s.public_header_files = 'Classes/SCSManagerWrapper.h', 'Classes/minfo_sdk.h'
   
   s.dependency 'Flutter'
   s.platform = :ios, '12.0'
@@ -20,7 +19,8 @@ Minfo SDK with native AudioQR detection using Cifrasoft libraries.
 
   s.pod_target_xcconfig = { 
     'DEFINES_MODULE' => 'YES',
-    'OTHER_LDFLAGS' => '-ObjC'
+    'OTHER_LDFLAGS' => '-ObjC',
+    'EXCLUDED_ARCHS[sdk=iphonesimulator*]' => 'arm64'
   }
   
   s.swift_version = '5.0'

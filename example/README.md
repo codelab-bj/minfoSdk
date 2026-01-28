@@ -1,6 +1,6 @@
 # minfo_sdk_example
 
-Demonstrates how to use the minfo_sdk plugin.
+A new Flutter project.
 
 ## Getting Started
 

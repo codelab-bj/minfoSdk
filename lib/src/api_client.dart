@@ -1,11 +1,12 @@
-import 'dart:convert';
+ import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class MinfoApiClient {
   static const String _baseUrl = 'https://api.dev.minfo.com/api';
   static const _storage = FlutterSecureStorage();
-  
+
   String? _clePublique;
   String? _clePrivee;
 
@@ -21,12 +22,12 @@ class MinfoApiClient {
         final data = json.decode(response.body)['data'];
         _clePublique = data['public_key'];
         _clePrivee = data['private_key'];
-        
+
         // Validation des clés (64 caractères hexadécimaux)
         if (!_isValidApiKey(_clePublique) || !_isValidApiKey(_clePrivee)) {
           throw Exception('Clés API invalides reçues du serveur');
         }
-        
+
         await _storage.write(key: 'minfo_cle_publique', value: _clePublique);
         await _storage.write(key: 'minfo_cle_privee', value: _clePrivee);
         return true;
@@ -56,12 +57,12 @@ class MinfoApiClient {
     if (_clePublique == null || _clePrivee == null) return null;
 
     try {
-      final headers = _clePrivee!.startsWith('eyJ') 
-        ? {'Authorization': 'Bearer $_clePrivee'}
-        : {
-            'X-API-Key': _clePublique!,
-            'X-API-Secret': _clePrivee!,
-          };
+      final headers = _clePrivee!.startsWith('eyJ')
+          ? {'Authorization': 'Bearer $_clePrivee'}
+          : {
+        'X-API-Key': _clePublique!,
+        'X-API-Secret': _clePrivee!,
+      };
 
       final response = await http.get(
         Uri.parse('$_baseUrl/minfo/campaigns'),
@@ -152,10 +153,10 @@ class MinfoApiClient {
           'timestamp': DateTime.now().millisecondsSinceEpoch.toString(),
         },
       );
-      
+
       print('🌐 [API] URL: $url');
       print('🔑 [API] Headers: X-API-Key=${_clePublique?.substring(0, 20)}...');
-      
+
       final response = await http.get(url, headers: {
         'X-API-Key': _clePublique!,
         'X-API-Secret': _clePrivee!,
@@ -166,12 +167,22 @@ class MinfoApiClient {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        return {
+        final result = {
           'outcome': data['id'] != null ? 'allow' : 'error',
           'payload': data['id'] != null ? {
-            'url': 'https://minfo.com/campaign/${data['id']}',
+            'url': 'https://app.minfo.com/campaign/${data['id']}',
+            'campaign_data': data,
           } : null,
         };
+
+        // Ouvrir automatiquement la page web si une campagne est trouvée
+        if (data['id'] != null) {
+          final campaignUrl = 'https://app.minfo.com/campaign/${data['id']}';
+          print('🌐 [AUTO-OPEN] Ouverture de: $campaignUrl');
+          await _openUrl(campaignUrl);
+        }
+
+        return result;
       } else {
         print('❌ [API] Erreur ${response.statusCode}: ${response.body}');
         return null;
@@ -217,16 +228,16 @@ class MinfoApiClient {
 
     try {
       final uri = Uri.parse('$_baseUrl/minfo/$endpoint');
-      final headers = _clePrivee!.startsWith('eyJ') 
-        ? {
-            'Authorization': 'Bearer $_clePrivee',
-            'Content-Type': 'application/json',
-          }
-        : {
-            'X-API-Key': _clePublique!,
-            'X-API-Secret': _clePrivee!,
-            'Content-Type': 'application/json',
-          };
+      final headers = _clePrivee!.startsWith('eyJ')
+          ? {
+        'Authorization': 'Bearer $_clePrivee',
+        'Content-Type': 'application/json',
+      }
+          : {
+        'X-API-Key': _clePublique!,
+        'X-API-Secret': _clePrivee!,
+        'Content-Type': 'application/json',
+      };
 
       http.Response response;
       if (method == 'POST') {
@@ -243,5 +254,20 @@ class MinfoApiClient {
       print('Erreur API $endpoint: $e');
     }
     return null;
+  }
+
+  // Ouvrir une URL dans le navigateur
+  Future<void> _openUrl(String url) async {
+    try {
+      final uri = Uri.parse(url);
+      if (await canLaunchUrl(uri)) {
+        await launchUrl(uri);
+        print('✅ [URL] Page ouverte: $url');
+      } else {
+        print('❌ [URL] Impossible d\'ouvrir: $url');
+      }
+    } catch (e) {
+      print('❌ [URL] Erreur: $e');
+    }
   }
 }
