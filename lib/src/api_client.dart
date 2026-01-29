@@ -108,6 +108,35 @@ class MinfoApiClient {
     }
   }
 
+  // Obtenir les données complètes de campagne (pour MinfoDetector)
+  Future<Map<String, dynamic>?> getCampaignData(String signature) async {
+    if (_clePublique == null || _clePrivee == null) return null;
+
+    try {
+      final response = await http.get(
+        Uri.parse('$_baseUrl/minfo/campaignfromaudio').replace(
+          queryParameters: {
+            'audio_id': signature,
+            'timestamp': DateTime.now().toIso8601String(),
+          },
+        ),
+        headers: {
+          'X-API-Key': _clePublique!,
+          'X-API-Secret': _clePrivee!,
+        },
+      );
+
+      if (response.statusCode == 200) {
+        return json.decode(response.body);
+      }
+      print('Erreur API campaign data: ${response.statusCode} - ${response.body}');
+      return null;
+    } catch (e) {
+      print('Erreur récupération données campagne: $e');
+      return null;
+    }
+  }
+
   // Générer un soundcode
   Future<String?> genererSoundcode(String signatureAudio) async {
     if (_clePublique == null || _clePrivee == null) return null;

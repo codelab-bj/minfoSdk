@@ -1,15 +1,17 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
-import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'api_client.dart';
-import 'minfo_auth.dart';
+import 'minfo_auth_manager.dart';
 import 'audio_qr_engine.dart';
+import 'utils.dart';
 
+/// SDK Minfo pour détection AudioQR avec contrôle utilisateur
 class MinfoSdk {
   static const MethodChannel _channel = MethodChannel('com.minfo_sdk/audioqr');
   static const MethodChannel _minfoChannel = MethodChannel(
     'com.gzone.campaign/audioCapture',
   );
+  static final _logger = MinfoLogger();
 
   final MinfoApiClient _apiClient = MinfoApiClient();
   late final AudioQREngine _audioEngine;
@@ -25,256 +27,144 @@ class MinfoSdk {
   }
   static MinfoSdk get instance => _instance;
 
-  StreamController<String>? _soundcodeController;
-  Stream<String>? get soundcodeStream => _soundcodeController?.stream;
+  StreamController<CampaignResult>? _campaignController;
+  Stream<CampaignResult>? get campaignStream => _campaignController?.stream;
+  bool _isListening = false;
 
-  // Initialiser le SDK avec JWT
-  Future<bool> initialiser(String tokenJwt) async {
-    final success = await _apiClient.genererClesApi(tokenJwt);
-    // NE PAS démarrer automatiquement la détection ici
-    // L'app doit d'abord demander les permissions puis appeler startAudioCapture()
-    return success;
-  }
-
-  // Méthode init pour compatibilité avec l'exemple
-  Future<bool> init({
-    String? clientId,
-    String? apiKey,
-    String? publicKey,
-    String? privateKey,
-    String? baseUrl,
-  }) async {
-    if (apiKey != null) {
-      return await initialiser(apiKey);
-    }
-    if (publicKey != null && privateKey != null) {
-      // Charger directement les clés API
-      const storage = FlutterSecureStorage();
-      await storage.write(key: 'minfo_cle_publique', value: publicKey);
-      await storage.write(key: 'minfo_cle_privee', value: privateKey);
-      return await chargerCles();
-    }
-    return false;
-  }
-
-  // Login et génération de clés avec cache
-  Future<Map<String, String>?> loginAndGenerateKeys(
-    String email,
-    String password, {
-    String? baseUrl,
-    bool forceRegenerate = false,
-  }) async {
-    final auth = MinfoAuth(baseUrl: baseUrl ?? 'https://api.dev.minfo.com');
-    return await auth.getApiKeys(email, password, forceRegenerate: forceRegenerate);
-  }
-
-  // Récupérer les clés stockées sans login
-  Future<Map<String, String>?> getStoredApiKeys() async {
-    final auth = MinfoAuth();
-    return await auth.getStoredApiKeys();
-  }
-
-  // Initialiser avec des clés existantes (pour éviter la régénération)
-  Future<void> initializeWithKeys(String publicKey, String privateKey) async {
-    final auth = MinfoAuth();
-    await auth.storeApiKeys(publicKey, privateKey);
-    print('✅ [SDK] Clés initialisées et stockées');
-  }
-
-  // S'assurer que des clés valides existent (avec clés par défaut si nécessaire)
-  Future<Map<String, String>?> ensureApiKeys({
-    String? defaultPublicKey,
-    String? defaultPrivateKey,
-  }) async {
-    final auth = MinfoAuth();
-    return await auth.ensureApiKeys(
-      defaultPublicKey: defaultPublicKey,
-      defaultPrivateKey: defaultPrivateKey,
-    );
-  }
-
-  // Forcer la régénération des clés
-  Future<Map<String, String>?> regenerateApiKeys(String email, String password, {String? baseUrl}) async {
-    return await loginAndGenerateKeys(email, password, baseUrl: baseUrl, forceRegenerate: true);
-  }
-
-  // Générer les clés API (méthode publique selon documentation)
-  Future<bool> generateApiKeys() async {
-    const storage = FlutterSecureStorage();
-    final jwt = await storage.read(key: 'minfo_jwt_token');
-
-    if (jwt == null) {
-      throw Exception(
-        'JWT token requis. Utilisez loginAndGenerateKeys() d\'abord.',
-      );
-    }
-
-    return await _apiClient.genererClesApi(jwt);
+  /// Initialise le SDK
+  static Future<void> initialize({required String publicApiKey}) async {
+    MinfoAuthManager.initialize(publicApiKey);
   }
 
   // Accès aux composants
   MinfoApiClient get apiClient => _apiClient;
   AudioQREngine get audioEngine => _audioEngine;
 
-  // Vérifier et configurer le listener si nécessaire
-  void _ensureListenerConfigured() {
-    // Vérifier si le listener est déjà configuré en testant si le channel a un handler
-    // Note: On ne peut pas vérifier directement, donc on le configure toujours
-    print('🔧 [MINFO_SDK] Vérification/Configuration du listener...');
-    _minfoChannel.setMethodCallHandler(_gererAppelsNatifsMinfo);
-    print('✅ [MINFO_SDK] Listener configuré/recongfiguré');
-  }
-
-  // Méthode publique pour configurer le listener manuellement
-  void configureListener() {
-    _ensureListenerConfigured();
-  }
-
-  // Charger les clés existantes
-  Future<bool> chargerCles() async {
-    final success = await _apiClient.chargerClesApi();
-    // NE PAS démarrer automatiquement la détection ici
-    // L'app doit d'abord demander les permissions puis appeler startAudioCapture()
-    return success;
-  }
-
-  // Démarrer la détection audio - Système exact du fichier de référence
-  Future<void> _demarrerDetectionAudio() async {
-    print('🚀 [MINFO_SDK] _demarrerDetectionAudio() appelé');
-    _soundcodeController = StreamController<String>.broadcast();
-    print('✅ [MINFO_SDK] StreamController créé');
-
+  /// Démarre l'écoute AudioQR
+  Future<void> listen() async {
+    if (_isListening) return;
+    
+    MinfoAuthManager.ensureInitialized();
+    _logger.info('MinfoSdk: Démarrage de l\'écoute');
+    
+    _campaignController = StreamController<CampaignResult>.broadcast();
+    _minfoChannel.setMethodCallHandler(_handleNativeEvents);
+    
     try {
-      // Initialiser le moteur AudioQR (pour compatibilité)
-      print('⚙️ [MINFO_SDK] Initialisation du moteur AudioQR...');
-      await _audioEngine.initialise();
-      print('✅ [MINFO_SDK] Moteur AudioQR initialisé');
-
-      // Configurer le listener pour le channel exact du fichier de référence
-      print(
-          '📡 [MINFO_SDK] Configuration du listener pour le channel minfo...');
-      _minfoChannel.setMethodCallHandler(_gererAppelsNatifsMinfo);
-      print('✅ [MINFO_SDK] Listener configuré');
-
-      // Démarrer la capture audio avec le système exact
-      print('📤 [MINFO_SDK] Envoi de startAudioCapture vers le natif...');
       await _minfoChannel.invokeMethod('startAudioCapture');
-      print('✅ [MINFO_SDK] startAudioCapture envoyé avec succès');
-      print('✅ [MINFO_SDK] Moteur AudioQR initialisé et capture démarrée');
+      _isListening = true;
+      _logger.info('MinfoSdk: Écoute démarrée');
     } catch (e) {
-      print('❌ [MINFO_SDK] Erreur initialisation moteur AudioQR: $e');
+      _logger.error('Erreur lors du démarrage: $e');
+      rethrow;
     }
   }
 
-  // Gérer les appels depuis le code natif - Format exact du fichier de référence
-  Future<void> _gererAppelsNatifsMinfo(MethodCall call) async {
-    print('📥 [MINFO_SDK] Événement reçu depuis le natif: ${call.method}');
-    print('📦 [MINFO_SDK] Arguments bruts: ${call.arguments}');
+  /// Met en pause l'écoute AudioQR
+  Future<void> pause() async {
+    if (!_isListening) return;
+    
+    _logger.info('MinfoSdk: Pause de l\'écoute');
+    try {
+      await _minfoChannel.invokeMethod('stopAudioCapture');
+      _isListening = false;
+      _logger.info('MinfoSdk: Écoute en pause');
+    } catch (e) {
+      _logger.error('Erreur lors de la pause: $e');
+    }
+  }
+
+  /// Arrête complètement l'écoute et ferme le stream
+  Future<void> stop() async {
+    _logger.info('MinfoSdk: Arrêt complet');
+    try {
+      if (_isListening) {
+        await _minfoChannel.invokeMethod('stopAudioCapture');
+      }
+      _campaignController?.close();
+      _campaignController = null;
+      _isListening = false;
+    } catch (e) {
+      _logger.error('Erreur lors de l\'arrêt: $e');
+    }
+  }
+
+  /// Gère les événements natifs et retourne les objets campaign
+  Future<void> _handleNativeEvents(MethodCall call) async {
+    _logger.debug('Événement reçu: ${call.method}');
 
     switch (call.method) {
       case 'onDetectedId':
-        print('🎯 [MINFO_SDK] onDetectedId reçu - Traitement...');
-        // Format exact du fichier de référence : [type, result[1], result[2], result[3]]
-        // type: 0 = Sons normaux (SoundCode), 1 = Ultrasons (UltraCode)
         final detectedData = call.arguments as List<dynamic>;
-        print('📊 [MINFO_SDK] Données détectées (format): $detectedData');
 
         if (detectedData.length >= 4) {
-          final int soundType = detectedData[0] as int;
           final int audioId = detectedData[1] as int;
-          final int counter = detectedData[2] as int;
-          final int timestamp = detectedData[3] as int;
+          _logger.info('Signal détecté ! ID: $audioId');
 
-          print(
-              '🔔 [MINFO_SDK] Signal détecté ! Type: $soundType, ID: $audioId, Counter: $counter, Timestamp: $timestamp');
-
-          // Transmettre à AudioQREngine pour startDetection()
-          print(
-              '📤 [MINFO_SDK] Transmission à AudioQREngine.handleDetectedId()...');
-          _audioEngine.handleDetectedId(detectedData);
-          print('✅ [MINFO_SDK] Transmission à AudioQREngine terminée');
-
-          // Convertir l'audioId en signature pour l'API
-          print('🌐 [MINFO_SDK] Génération du soundcode pour l\'API...');
-          final signature = audioId.toString();
-          final soundcode = await _apiClient.genererSoundcode(signature);
-          if (soundcode != null) {
-            print('✅ [MINFO_SDK] Soundcode généré: $soundcode');
-            print('📤 [MINFO_SDK] Ajout au stream...');
-            _soundcodeController?.add(soundcode);
-            print('✅ [MINFO_SDK] Ajouté au stream avec succès');
+          // Récupérer les données de campagne complètes
+          final campaignData = await _apiClient.getCampaignData(audioId.toString());
+          
+          if (campaignData != null) {
+            final result = CampaignResult(
+              audioId: audioId,
+              campaignUrl: campaignData['campaign_url'] ?? campaignData['url'],
+              campaignData: campaignData,
+              timestamp: DateTime.now(),
+            );
+            
+            _logger.info('Campagne trouvée: ${result.campaignUrl}');
+            _campaignController?.add(result);
           } else {
-            print('⚠️ [MINFO_SDK] Soundcode null, non ajouté au stream');
+            final errorResult = CampaignResult(
+              audioId: audioId,
+              error: 'Aucune campagne trouvée pour cet ID',
+              timestamp: DateTime.now(),
+            );
+            _campaignController?.add(errorResult);
           }
-        } else {
-          print(
-              '❌ [MINFO_SDK] Format de données invalide, longueur: ${detectedData.length}');
-        }
-        break;
-      case 'onSignalDetected':
-        // Ancien format pour compatibilité
-        final args = call.arguments as Map;
-        final signature = args['codes'] as String;
-        final soundcode = await _apiClient.genererSoundcode(signature);
-        if (soundcode != null) {
-          _soundcodeController?.add(soundcode);
         }
         break;
     }
   }
 
-  // Récupérer les campagnes
-  Future<List<dynamic>?> obtenirCampagnes() async {
-    return await _apiClient.obtenirCampagnes();
+  /// Récupère les données d'une campagne par signature
+  Future<Map<String, dynamic>?> getCampaignData(String signature) async {
+    MinfoAuthManager.ensureInitialized();
+    return await _apiClient.getCampaignData(signature);
   }
 
-  // Obtenir l'URL de campagne pour une signature
-  Future<String?> getCampaignUrl(String signature) async {
-    return await _apiClient.getCampaignUrl(signature);
-  }
+  /// Vérifie si l'écoute est active
+  bool get isListening => _isListening;
+}
 
-  // Démarrer la capture audio manuellement - Système exact du fichier de référence
-  // Note: Le listener n'est PAS configuré ici - l'app doit gérer les événements
-  // via son propre setMethodCallHandler sur le channel 'com.gzone.campaign/audioCapture'
-  Future<void> startAudioCapture() async {
-    print('🚀 [MINFO_SDK] startAudioCapture() appelé manuellement');
-    try {
-      // Envoyer la commande au natif
-      print('📤 [MINFO_SDK] Envoi de startAudioCapture vers le natif...');
-      await _minfoChannel.invokeMethod('startAudioCapture');
-      print('✅ [MINFO_SDK] Capture audio démarrée');
-      print(
-          '💡 [MINFO_SDK] Les événements onDetectedId seront reçus par le listener de l\'app');
-    } catch (e) {
-      print('❌ [MINFO_SDK] Erreur lors du démarrage de la capture: $e');
-      rethrow;
-    }
-  }
+/// Résultat de détection de campagne
+class CampaignResult {
+  final int audioId;
+  final String? campaignUrl;
+  final Map<String, dynamic>? campaignData;
+  final String? error;
+  final DateTime timestamp;
 
-  // Arrêter la capture audio manuellement - Système exact du fichier de référence
-  Future<void> stopAudioCapture() async {
-    print('⏹️ [MINFO_SDK] stopAudioCapture() appelé manuellement');
-    try {
-      print('📤 [MINFO_SDK] Envoi de stopAudioCapture vers le natif...');
-      await _minfoChannel.invokeMethod('stopAudioCapture');
-      print('✅ [MINFO_SDK] Capture audio arrêtée');
-    } catch (e) {
-      print('❌ [MINFO_SDK] Erreur lors de l\'arrêt de la capture: $e');
-      rethrow;
-    }
-  }
+  CampaignResult({
+    required this.audioId,
+    this.campaignUrl,
+    this.campaignData,
+    this.error,
+    required this.timestamp,
+  });
 
-  // Arrêter la détection - Système exact du fichier de référence
-  Future<void> arreter() async {
-    try {
-      // Utiliser stopAudioCapture du système exact
-      await stopAudioCapture();
-      // Garder aussi l'ancien système pour compatibilité
-      await _channel.invokeMethod('stopDetection');
-    } catch (e) {
-      print('Erreur lors de l\'arrêt de la détection: $e');
-    }
-    _soundcodeController?.close();
-    _soundcodeController = null;
+  bool get hasError => error != null;
+  bool get isSuccess => campaignUrl != null && campaignData != null;
+
+  // Getters pour accès facile aux données
+  String? get campaignId => campaignData?['id']?.toString();
+  String? get campaignName => campaignData?['name'];
+  String? get campaignDescription => campaignData?['description'];
+  String? get campaignImage => campaignData?['image'];
+  Map<String, dynamic>? get metadata => campaignData?['metadata'];
+
+  @override
+  String toString() {
+    return 'CampaignResult(audioId: $audioId, url: $campaignUrl, error: $error)';
   }
 }
