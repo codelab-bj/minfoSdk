@@ -97,7 +97,7 @@ class CampaignResult {
 The SDK relies on communication between Flutter and native engines:
 
 1. **Flutter** requests startup with `listen()`
-2. **Native Engines (Cifrasoft)** analyze audio stream
+2. **Native Engines** analyze audio stream
 3. **Minfo API** validates signal and returns campaign data
 4. **Your App** receives `CampaignResult` via stream and handles UI
 
