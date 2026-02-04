@@ -2,7 +2,8 @@
 
 @interface SCSManagerWrapper : NSObject
 
-+ (instancetype)shared;
++ (nonnull instancetype)shared;
+- (void)prepareWithSettings;
 - (void)startSearching;
 - (void)stopSearching;
 

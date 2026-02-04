@@ -3,7 +3,7 @@
 
 @interface SCSManager : NSObject
 
-+(SCSManager*) shared;
++(SCSManager*) sharedManager;
 
 -(void) startSearching;
 -(void) singleSearching;

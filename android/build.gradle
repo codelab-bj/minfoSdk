@@ -9,7 +9,7 @@ buildscript {
     }
 
     dependencies {
-        classpath("com.android.tools.build:gradle:8.1.0")
+        classpath("com.android.tools.build:gradle:8.2.1")
         classpath("org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version")
     }
 }
@@ -18,12 +18,13 @@ allprojects {
     repositories {
         google()
         mavenCentral()
-    }
-}
-
-repositories {
-    flatDir {
-        dirs 'libs'
+        flatDir {
+            dirs 'libs'
+        }
+        // Ajouter le chemin vers les libs du SDK pour les projets qui l'utilisent
+        flatDir {
+            dirs project(':minfo_sdk').projectDir.toString() + '/libs'
+        }
     }
 }
 
@@ -36,12 +37,12 @@ android {
     compileSdk = 35
 
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     kotlinOptions {
-        jvmTarget = JavaVersion.VERSION_11
+        jvmTarget = "17"
     }
 
     sourceSets {
@@ -54,9 +55,12 @@ android {
     }
 
     dependencies {
-        // AudioQR native libraries (AAR complets comme dans l'app principale)
+        // Bibliothèques natives Cifrasoft
         implementation(name: 'soundCode2UltraCodeLib-release', ext: 'aar')
         implementation(name: 'audioRecordLib-release', ext: 'aar')
+        
+        // Dépendances de base
+        implementation 'androidx.core:core-ktx:1.12.0'
         
         testImplementation("org.jetbrains.kotlin:kotlin-test")
         testImplementation("org.mockito:mockito-core:5.0.0")

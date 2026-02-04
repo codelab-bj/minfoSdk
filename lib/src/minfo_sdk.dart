@@ -32,8 +32,14 @@ class MinfoSdk {
   bool _isListening = false;
 
   /// Initialise le SDK
-  static Future<void> initialize({required String publicApiKey}) async {
-    MinfoAuthManager.initialize(publicApiKey);
+  static Future<void> initialize({
+    required String publicKey,
+    String? privateKey
+  }) async {
+    MinfoAuthManager.initialize(publicKey, privateKey: privateKey);
+    // Créer le stream dès l'initialisation
+    _instance._campaignController = StreamController<CampaignResult>.broadcast();
+    _minfoChannel.setMethodCallHandler(_instance._handleNativeEvents);
   }
 
   // Accès aux composants
@@ -47,8 +53,7 @@ class MinfoSdk {
     MinfoAuthManager.ensureInitialized();
     _logger.info('MinfoSdk: Démarrage de l\'écoute');
     
-    _campaignController = StreamController<CampaignResult>.broadcast();
-    _minfoChannel.setMethodCallHandler(_handleNativeEvents);
+    // Le stream et handler sont déjà configurés dans initialize()
     
     try {
       await _minfoChannel.invokeMethod('startAudioCapture');
@@ -107,12 +112,12 @@ class MinfoSdk {
           if (campaignData != null) {
             final result = CampaignResult(
               audioId: audioId,
-              campaignUrl: campaignData['campaign_url'] ?? campaignData['url'],
+              campaignUrl: campaignData['share_smart_link'] ?? campaignData['campaign_url'] ?? campaignData['url'],
               campaignData: campaignData,
               timestamp: DateTime.now(),
             );
             
-            _logger.info('Campagne trouvée: ${result.campaignUrl}');
+            _logger.info('Campagne trouvée: ${result.campaignName}');
             _campaignController?.add(result);
           } else {
             final errorResult = CampaignResult(
@@ -142,6 +147,7 @@ class CampaignResult {
   final int audioId;
   final String? campaignUrl;
   final Map<String, dynamic>? campaignData;
+  final Map<String, dynamic>? metadata;
   final String? error;
   final DateTime timestamp;
 
@@ -149,17 +155,18 @@ class CampaignResult {
     required this.audioId,
     this.campaignUrl,
     this.campaignData,
+    this.metadata,
     this.error,
     required this.timestamp,
   });
 
   bool get hasError => error != null;
-  bool get isSuccess => campaignUrl != null && campaignData != null;
+  bool get isSuccess => campaignData != null && error == null;
 
   // Getters de compatibilité (anciens noms)
   String? get campaignName => name;
   String? get campaignImage => image;
-  String? get campaignId => id?.toString();
+  String? get campaignId => campaignData?['id']?.toString();
   String? get name => campaignData?['name'];
   String? get campaignDescription => campaignData?['campaign_description'];
   String? get image => campaignData?['image'];
@@ -171,6 +178,11 @@ class CampaignResult {
   String? get hashtags => campaignData?['hashtags'];
   String? get department => campaignData?['department'];
   String? get fromEvent => campaignData?['from_event'];
+  
+  // Champs supplémentaires
+  String? get abTestingDetails => campaignData?['ab_testing_details'];
+  String? get defaultAudio => campaignData?['default_audio'];
+  int? get itemCount => campaignData?['itemscounts'];
   
   // Couleurs et style
   String? get backgroundColor => campaignData?['background_color'];
@@ -212,7 +224,6 @@ class CampaignResult {
   int? get scanType => campaignData?['scanType'];
   int? get campaignType => campaignData?['campaign_type'];
   int? get numViews => campaignData?['num_views'];
-  int? get itemCount => campaignData?['itemscounts'];
   int? get campaignItemsGroupsNumber => campaignData?['count_campaign_item_group'];
   int? get campaignItemsNumber => campaignData?['count_campaign_item'];
   
@@ -227,6 +238,13 @@ class CampaignResult {
   int? get mostConnectionDuration => campaignData?['most_connection_duration'];
   int? get totalLengthContent => campaignData?['total_length_content'];
   int? get totalUniqueChatsStarted => campaignData?['total_unique_chats_started'];
+  
+  // Statistiques avancées
+  int? get uniqueConnectionsVideoAudio => campaignData?['unique_connections_video_audio'];
+  int? get uniqueConnectionsSharePost => campaignData?['unique_connections_share_post'];
+  int? get uniqueConnectionsMinfoZone => campaignData?['unique_connections_minfo_zone'];
+  int? get uniqueConnnectionsMinfoQr => campaignData?['unique_connnections_minfo_qr'];
+  int? get uniqueConnectionsSmartLink => campaignData?['unique_connections_smart_link'];
   
   // Chat et communication
   bool? get contactUserByChat => campaignData?['contact_user_by_chat'];

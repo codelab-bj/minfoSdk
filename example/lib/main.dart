@@ -1,16 +1,16 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:minfo_sdk/minfo_sdk.dart';
-import 'package:minfo_sdk/src/minfo_config.dart';
 import 'package:permission_handler/permission_handler.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // Initialisation directe avec les clés du fichier config
-  await MinfoSdk.instance.init(
-    publicKey: MinfoKeys.publicKey,
-    privateKey: MinfoKeys.privateKey,
+  // L'app fournit ses propres clés (pas celles du SDK)
+  await MinfoSdk.initialize(
+    publicKey: "44aa1a343d185494158eb275b17063855fccfbe4ae270e33ebc69372fe3c941a",
+    privateKey: "00b7b3d2f0d27f1ffddf9875b57a8eb96d4fed21f8880ec915ec4962c8e95419",
   );
   
   runApp(const MyApp());
@@ -43,15 +43,47 @@ class _MinfoExamplePageState extends State<MinfoExamplePage> {
   bool _isProcessing = false;
   String _statusMessage = "Prêt pour la detection";
 
+  @override
+  void initState() {
+    super.initState();
+    _setupCampaignListener();
+  }
+
+  void _setupCampaignListener() {
+    // Attendre que le stream soit disponible
+    Timer.periodic(Duration(milliseconds: 100), (timer) {
+      if (MinfoSdk.instance.campaignStream != null) {
+        timer.cancel();
+        MinfoSdk.instance.campaignStream!.listen((result) {
+          print("🔥 Stream reçu: ${result.toString()}");
+          
+          if (mounted) {
+            setState(() {
+              _isProcessing = false;
+              if (result.campaignData != null && result.error == null) {
+                _statusMessage = "✅ ${result.campaignData!['name'] ?? 'Campagne détectée'}";
+              } else {
+                _statusMessage = "❌ ${result.error ?? 'Erreur inconnue'}";
+              }
+            });
+          }
+        });
+      }
+    });
+  }
+
   // --- VOTRE LOGIQUE DE DÉMARRAGE ---
   Future<void> _handleMinfoLink() async {
+    // 1. Demander uniquement le micro (Indispensable pour l'Activation)
     final micStatus = await Permission.microphone.request();
-    
-    // Sur iOS, on ne demande pas la permission phone
+
     if (!micStatus.isGranted) {
       _showError("Permission microphone nécessaire.");
       return;
     }
+
+    // 2. Optionnel : Demander le téléphone sans bloquer si refusé
+    await Permission.phone.request();
 
     setState(() {
       _isProcessing = true;
@@ -59,24 +91,15 @@ class _MinfoExamplePageState extends State<MinfoExamplePage> {
     });
 
     try {
-      await MinfoSdk.instance.startAudioCapture();
+      // Étape 1 & 2 du SDK : Activation du micro et Décodage
+      await MinfoSdk.instance.listen();
     } catch (e) {
       setState(() {
         _isProcessing = false;
         _statusMessage = "❌ $e";
       });
     }
-
-    Future.delayed(const Duration(seconds: 15), () {
-      if (mounted && _isProcessing) {
-        setState(() {
-          _isProcessing = false;
-          _statusMessage = "⏰ Aucun signal détecté";
-        });
-      }
-    });
   }
-
   void _showError(String msg) {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(msg), backgroundColor: Colors.red),

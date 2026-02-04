@@ -10,13 +10,10 @@
             <data android:scheme="https" />
         </intent>
     </queries>
-    <application
-        android:label="MonAppMinfo"
-        android:icon="@mipmap/ic_launcher"
-        android:usesCleartextTraffic="true"> <service
-        android:name="com.cifrasoft.services.SoundCodeUltraCodeService"
-        android:label="SoundCodeUltraCodeService"
-        android:exported="false" />
-
+    <application>
+        <service
+            android:name="com.cifrasoft.services.SoundCodeUltraCodeService"
+            android:label="SoundCodeUltraCodeService"
+            android:exported="false" />
     </application>
 </manifest>

@@ -2,6 +2,7 @@
 import 'package:http/http.dart' as http;
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'minfo_auth_manager.dart';
 
 class MinfoApiClient {
   static const String _baseUrl = 'https://api.dev.minfo.com/api';
@@ -110,29 +111,43 @@ class MinfoApiClient {
 
   // Obtenir les données complètes de campagne (pour MinfoDetector)
   Future<Map<String, dynamic>?> getCampaignData(String signature) async {
-    if (_clePublique == null || _clePrivee == null) return null;
+    // Utiliser les clés depuis MinfoAuthManager
+    final publicKey = MinfoAuthManager.publicKey;
+    final privateKey = MinfoAuthManager.privateKey;
+    
+    if (publicKey == null || privateKey == null) {
+      print('❌ [API] Clés API manquantes: public=$publicKey, private=$privateKey');
+      return null;
+    }
 
     try {
-      final response = await http.get(
-        Uri.parse('$_baseUrl/minfo/campaignfromaudio').replace(
-          queryParameters: {
-            'audio_id': signature,
-            'timestamp': DateTime.now().toIso8601String(),
-          },
-        ),
-        headers: {
-          'X-API-Key': _clePublique!,
-          'X-API-Secret': _clePrivee!,
+      final url = Uri.parse('$_baseUrl/minfo/campaignfromaudio').replace(
+        queryParameters: {
+          'audio_id': signature,
         },
       );
+      
+      print('🌐 [API] URL appelée: $url');
+      print('🔑 [API] Headers: X-API-Key=${publicKey.substring(0, 8)}..., X-API-Secret=${privateKey.substring(0, 8)}...');
+      
+      final response = await http.get(
+        url,
+        headers: {
+          'X-API-Key': publicKey,
+          'X-API-Secret': privateKey,
+        },
+      );
+
+      print('📡 [API] Status: ${response.statusCode}');
+      print('📡 [API] Response: ${response.body}');
 
       if (response.statusCode == 200) {
         return json.decode(response.body);
       }
-      print('Erreur API campaign data: ${response.statusCode} - ${response.body}');
+      print('❌ [API] Erreur campaign data: ${response.statusCode} - ${response.body}');
       return null;
     } catch (e) {
-      print('Erreur récupération données campagne: $e');
+      print('❌ [API] Exception: $e');
       return null;
     }
   }

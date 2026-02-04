@@ -38,7 +38,7 @@ The SDK handles the complete AudioQR "connection" process:
    void main() async {
      WidgetsFlutterBinding.ensureInitialized();
      
-     await MinfoSdk.initialize(publicApiKey: 'your_public_key');
+     await MinfoSdk.initialize(publicKey: 'your_public_key', privateKey: 'your_private_key');
      
      runApp(MyApp());
    }
@@ -89,6 +89,9 @@ class CampaignResult {
   
   bool get isSuccess;            // True if campaign found
   bool get hasError;             // True if error occurred
+  
+  // Note: Additional fields may be available but not documented here
+  // Check the actual implementation for complete field list
 }
 ```
 
