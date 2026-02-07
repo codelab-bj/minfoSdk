@@ -233,57 +233,51 @@ class AudioQREngine {
 
   /// Gérer les détections reçues via onDetectedId
   /// Appelé par minfo_sdk.dart quand il reçoit onDetectedId
+  /// Gérer les détections reçues via onDetectedId
   void handleDetectedId(List<dynamic> detectedData) {
     print('📥 [AUDIOQR] handleDetectedId() appelé avec: $detectedData');
 
-    if (_detectionCompleter == null) {
-      print('⚠️ [AUDIOQR] Aucun Completer en attente, détection non démarrée');
-      return;
-    }
-
-    if (_detectionCompleter!.isCompleted) {
-      print('⚠️ [AUDIOQR] Completer déjà complété, résultat ignoré');
-      return;
+    // 1. On vérifie d'abord si on a un completer en attente
+    if (_detectionCompleter == null || _detectionCompleter!.isCompleted) {
+      print('💡 [AUDIOQR] Info: ID reçu en mode passif (pas de Completer actif)');
+      // On ne s'arrête pas là, on continue pour traiter la donnée si besoin
     }
 
     try {
       // Format exact du fichier de référence : [type, result[1], result[2], result[3]]
-      if (detectedData.length >= 4) {
+      if (detectedData.length >= 2) { // Sécurité : au moins type et ID
         final int audioId = detectedData[1] as int;
         print('🎯 [AUDIOQR] AudioId extrait: $audioId');
 
         // Créer le signal
         final signal = AudioQRSignal(
           signature: audioId.toString(),
-          confidence: 0.95, // Confiance par défaut
+          confidence: 0.95,
           detectedAt: DateTime.now(),
           signalId: _uuid.v4(),
         );
-        print(
-            '✅ [AUDIOQR] Signal créé: signature=${signal.signature}, signalId=${signal.signalId}');
 
         _isDetecting = false;
-        print('📤 [AUDIOQR] Complétion du Completer avec succès...');
-        _detectionCompleter!.complete(DetectionResult.success(signal));
-        _detectionCompleter = null;
-        print('✅ [AUDIOQR] Completer complété avec succès');
+
+        // 2. On complète le Future SI il existe
+        if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
+          print('📤 [AUDIOQR] Complétion du Completer avec succès...');
+          _detectionCompleter!.complete(DetectionResult.success(signal));
+          _detectionCompleter = null;
+        }
       } else {
-        print(
-            '❌ [AUDIOQR] Format de données invalide, longueur: ${detectedData.length}');
+        print('❌ [AUDIOQR] Format de données invalide (trop court)');
       }
     } catch (e) {
       print('❌ [AUDIOQR] Erreur dans handleDetectedId: $e');
       _isDetecting = false;
       if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
-        print('📤 [AUDIOQR] Complétion du Completer avec erreur...');
         _detectionCompleter!.complete(
             DetectionResult.failure(EngineFailureException(e.toString())));
         _detectionCompleter = null;
-        print('✅ [AUDIOQR] Completer complété avec erreur');
       }
     }
   }
-
   /// Stop any ongoing detection.
   void stopDetection() {
     print('⏹️ [AUDIOQR] stopDetection() appelé');

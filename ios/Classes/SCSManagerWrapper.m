@@ -1,7 +1,11 @@
 #import "SCSManagerWrapper.h"
 #import "../Frameworks/SCSTB.framework/SCSManager.h"
+#import "../Frameworks/SCSTB.framework/SCSSettings.h"
 
-@implementation SCSManagerWrapper
+@implementation SCSManagerWrapper {
+    SCSManager *_manager;
+    BOOL _configured;
+}
 
 + (instancetype)shared {
     static SCSManagerWrapper *sharedInstance = nil;
@@ -12,39 +16,52 @@
     return sharedInstance;
 }
 
-- (void)startSearching {
-    NSLog(@"[SCSManagerWrapper] Tentative de démarrage...");
-    @try {
-        // Essayer d'abord l'initialisation standard
-        SCSManager *manager = [[SCSManager alloc] init];
-        [manager startSearching];
-        NSLog(@"[SCSManagerWrapper] Démarrage réussi avec init");
-    } @catch (NSException *exception) {
-        NSLog(@"[SCSManagerWrapper] Erreur avec init: %@", exception.reason);
-        // Fallback : essayer shared si init échoue
-        @try {
-            Class managerClass = NSClassFromString(@"SCSManager");
-            if ([managerClass respondsToSelector:@selector(shared)]) {
-                SCSManager *manager = [managerClass performSelector:@selector(shared)];
-                [manager startSearching];
-                NSLog(@"[SCSManagerWrapper] Démarrage réussi avec shared");
-            } else {
-                NSLog(@"[SCSManagerWrapper] Méthode shared non disponible");
-            }
-        } @catch (NSException *innerException) {
-            NSLog(@"[SCSManagerWrapper] Erreur finale: %@", innerException.reason);
-        }
+- (instancetype)init {
+    self = [super init];
+    if (self) {
+        _manager = nil;
+        _configured = NO;
     }
+    return self;
+}
+
+- (void)ensureConfigured {
+    NSLog(@"[SCSManagerWrapper] ✅ EXECUTION NOTRE CODE: ensureConfigured");
+    if (_configured && _manager != nil) return;
+
+    // Même configuration que l'app principale (AppDelegate.swift)
+    scsSettingsStruct scsSettingsLO;
+    scsSettingsLO.userSearchInterval = SCS_SEARCH_INTERVAL_DEFAULT;
+    scsSettingsLO.userLengthCounter = SCS_COUNTER_LENGTH_LO;
+    scsSettingsLO.userPeriodIncrementCounter = SCS_COUNTER_INCREMENT_LO;
+    scsSettingsLO.userOffsetCounterAdjustment = SCS_COUNTER_OFFSET_VALUE_LO;
+    scsSettingsLO.userOffsetDelayAdjustment = SCS_DELAY_OFFSET_ADJUSTMENT_LO;
+
+    scsSettingsStruct scsSettingsHI;
+    scsSettingsHI.userSearchInterval = SCS_SEARCH_INTERVAL_DEFAULT;
+    scsSettingsHI.userLengthCounter = SCS_COUNTER_LENGTH_HI;
+    scsSettingsHI.userPeriodIncrementCounter = SCS_COUNTER_INCREMENT_HI;
+    scsSettingsHI.userOffsetCounterAdjustment = SCS_COUNTER_OFFSET_VALUE_HI;
+    scsSettingsHI.userOffsetDelayAdjustment = SCS_DELAY_OFFSET_ADJUSTMENT_HI;
+
+    _manager = [[SCSManager alloc] init];
+    [_manager settingsSearching:&scsSettingsLO :&scsSettingsHI];
+    _configured = YES;
+    NSLog(@"[SCSManagerWrapper] SCSManager configuré (même settings que l'app principale)");
+}
+
+- (void)startSearching {
+    NSLog(@"[SCSManagerWrapper] ✅ EXECUTION NOTRE CODE: startSearching");
+    [self ensureConfigured];
+    [_manager startSearching];
+    NSLog(@"[SCSManagerWrapper] start recording ...");
 }
 
 - (void)stopSearching {
-    NSLog(@"[SCSManagerWrapper] Tentative d'arrêt...");
-    @try {
-        SCSManager *manager = [[SCSManager alloc] init];
-        [manager stopSearching];
-        NSLog(@"[SCSManagerWrapper] Arrêt réussi");
-    } @catch (NSException *exception) {
-        NSLog(@"[SCSManagerWrapper] Erreur: %@", exception.reason);
+    NSLog(@"[SCSManagerWrapper] stopSearching");
+    if (_manager != nil) {
+        [_manager stopSearching];
+        NSLog(@"[SCSManagerWrapper] stopped recording");
     }
 }
 

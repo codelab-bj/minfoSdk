@@ -1,8 +1,8 @@
 ## Changelog
 
 **2.3.0**
-* **Natif** : Intégration complète des moteurs de détection Cifrasoft pour Android (.aar) et iOS (.a).
-* **Feature** : Ajout de la méthode `startDetection()` pour lancer l'interface de capture audio.
-* **Feature** : Gestion native des permissions microphone.
-* **Architecture** : Refonte du système de communication via MethodChannels.
-* **Sécurité** : Implémentation du stockage sécurisé des clés API.
+* **Native** : Full integration of Cifrasoft detection engines for Android (.aar) and iOS (.a).
+* **Feature** :  Added the startDetection() method to launch the audio capture interface.
+* **Feature** : Native handling of microphone permissions.
+* **Architecture** : Refactored the communication system using MethodChannels.
+* **Security** : Implemented secure storage for API keys.

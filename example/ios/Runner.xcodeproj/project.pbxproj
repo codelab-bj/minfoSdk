@@ -15,7 +15,6 @@
 		97C146FC1CF9000F007C117D /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FA1CF9000F007C117D /* Main.storyboard */; };
 		97C146FE1CF9000F007C117D /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FD1CF9000F007C117D /* Assets.xcassets */; };
 		97C147011CF9000F007C117D /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */; };
-		FA392C862F2922070023670D /* SCSTB_LibraryU.a in Frameworks */ = {isa = PBXBuildFile; fileRef = FA392C852F2921F30023670D /* SCSTB_LibraryU.a */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -61,7 +60,6 @@
 		97C147021CF9000F007C117D /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		C78E9328344BB8364D696CFF /* Pods-Runner.debug.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.debug.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.debug.xcconfig"; sourceTree = "<group>"; };
 		E9BE99FBFEB182444C75985B /* Pods_Runner.framework */ = {isa = PBXFileReference; explicitFileType = wrapper.framework; includeInIndex = 0; path = Pods_Runner.framework; sourceTree = BUILT_PRODUCTS_DIR; };
-		FA392C852F2921F30023670D /* SCSTB_LibraryU.a */ = {isa = PBXFileReference; lastKnownFileType = archive.ar; name = SCSTB_LibraryU.a; path = ../../ios/Frameworks/SCSTB_LibraryU.a; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -70,7 +68,6 @@
 			buildActionMask = 2147483647;
 			files = (
 				59E4BBF50FAA545B3CA9B5D0 /* Pods_Runner.framework in Frameworks */,
-				FA392C862F2922070023670D /* SCSTB_LibraryU.a in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -90,7 +87,6 @@
 		3174B65B2F5269DA9B526FA8 /* Frameworks */ = {
 			isa = PBXGroup;
 			children = (
-				FA392C852F2921F30023670D /* SCSTB_LibraryU.a */,
 				E9BE99FBFEB182444C75985B /* Pods_Runner.framework */,
 			);
 			name = Frameworks;

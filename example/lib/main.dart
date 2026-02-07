@@ -1,18 +1,15 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:minfo_sdk/minfo_sdk.dart';
-import 'package:minfo_sdk/src/minfo_config.dart';
-import 'package:permission_handler/permission_handler.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // Initialisation directe avec les clés du fichier config
-  await MinfoSdk.instance.init(
-    publicKey: MinfoKeys.publicKey,
-    privateKey: MinfoKeys.privateKey,
+
+  // Initialisation globale
+  await MinfoSdk.initialize(
+    publicApiKey: "356489b34cc9f8662add531971e95256af8b332d9cc9ef4b76fca4a8971bd0c1",
+    privateApiKey: "18811688785c60de5cded378d3a1a7d0efdc21e2e1594ba569fb62347fb08c1a",
   );
-  
+
   runApp(const MyApp());
 }
 
@@ -23,90 +20,115 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
+      title: 'Minfo SDK Demo',
       theme: ThemeData(
-        primarySwatch: Colors.orange,
+        colorScheme: ColorScheme.fromSeed(seedColor: Colors.orange),
         useMaterial3: true,
       ),
-      home: const MinfoExamplePage(),
+      home: const MinfoPage(),
     );
   }
 }
 
-class MinfoExamplePage extends StatefulWidget {
-  const MinfoExamplePage({super.key});
+// AJOUT : La classe StatefulWidget qui manquait
+class MinfoPage extends StatefulWidget {
+  const MinfoPage({super.key});
 
   @override
-  _MinfoExamplePageState createState() => _MinfoExamplePageState();
+  State<MinfoPage> createState() => _MinfoPageState();
 }
 
-class _MinfoExamplePageState extends State<MinfoExamplePage> {
-  bool _isProcessing = false;
-  String _statusMessage = "Prêt pour la detection";
+class _MinfoPageState extends State<MinfoPage> {
+  String _status = "Prêt à scanner";
+  bool _isScanning = false;
 
-  // --- VOTRE LOGIQUE DE DÉMARRAGE ---
-  Future<void> _handleMinfoLink() async {
-    final micStatus = await Permission.microphone.request();
-    
-    // Sur iOS, on ne demande pas la permission phone
-    if (!micStatus.isGranted) {
-      _showError("Permission microphone nécessaire.");
-      return;
-    }
-
+  void _startMinfo() {
     setState(() {
-      _isProcessing = true;
-      _statusMessage = "Écoute en cours...";
+      _status = "Écoute active...";
+      _isScanning = true;
     });
 
-    try {
-      await MinfoSdk.instance.startAudioCapture();
-    } catch (e) {
-      setState(() {
-        _isProcessing = false;
-        _statusMessage = "❌ $e";
-      });
-    }
-
-    Future.delayed(const Duration(seconds: 15), () {
-      if (mounted && _isProcessing) {
+    // On appelle startScan qui gère les permissions ET le démarrage
+    MinfoSdk.instance.startScan(
+      onResult: (campaign) {
         setState(() {
-          _isProcessing = false;
-          _statusMessage = "⏰ Aucun signal détecté";
+          _status = "Trouvé : ${campaign.name}";
+          _isScanning = false;
         });
-      }
-    });
+        _showMyDialog(campaign);
+      },
+      onError: (err) {
+        setState(() {
+          _status = "Erreur : $err";
+          _isScanning = false;
+        });
+      },
+    );
   }
 
-  void _showError(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg), backgroundColor: Colors.red),
+  void _showMyDialog(CampaignResult result) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // Force l'utilisateur à cliquer sur OK
+      builder: (ctx) => AlertDialog(
+        title: Text(result.name ?? "Campagne détectée"),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (result.image != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Image.network(result.image!, height: 100),
+              ),
+            Text(result.campaignDescription ?? "Aucune description disponible."),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("OK"),
+          ),
+        ],
+      ),
     );
+  }
+
+  @override
+  void dispose() {
+    MinfoSdk.instance.stop(); // Sécurité : on coupe le micro si on quitte la page
+    super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-      ),
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                _statusMessage,
-                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                textAlign: TextAlign.center,
+      appBar: AppBar(title: const Text("Minfo Demo")),
+      body: Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            // Un petit indicateur visuel
+            Icon(
+              _isScanning ? Icons.mic : Icons.mic_none,
+              size: 80,
+              color: _isScanning ? Colors.orange : Colors.grey,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              _status,
+              textAlign: TextAlign.center,
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 40),
+            ElevatedButton.icon(
+              onPressed: _isScanning ? null : _startMinfo,
+              icon: const Icon(Icons.search),
+              label: Text(_isScanning ? "RECHERCHE..." : "DÉMARRER LE SCAN"),
+              style: ElevatedButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
               ),
-              SizedBox(height: 20),
-              ElevatedButton(
-                onPressed: _isProcessing ? null : _handleMinfoLink,
-                child: Text(_isProcessing ? "Écoute..." : "Démarrer détection"),
-              ),
-            ],
-          ),
+            ),
+          ],
         ),
       ),
     );

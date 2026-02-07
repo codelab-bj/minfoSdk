@@ -16,13 +16,15 @@ The SDK handles the complete AudioQR "connection" process:
 1. **Add** the SDK as a local dependency in `pubspec.yaml`
 
 2. **Configurations**:
-   
+
    **Android** - configured in your `AndroidManifest.xml`:
    ```xml
    <uses-permission android:name="android.permission.RECORD_AUDIO" />
    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <uses-permission android:name="android.permission.READ_PHONE_STATE" />
+   <uses-permission android:name="android.permission.INTERNET" />
    ```
-   
+
    **iOS** - configured in your `Info.plist`:
    ```xml
    <key>NSMicrophoneUsageDescription</key>
@@ -38,7 +40,7 @@ The SDK handles the complete AudioQR "connection" process:
    void main() async {
      WidgetsFlutterBinding.ensureInitialized();
      
-     await MinfoSdk.initialize(publicApiKey: 'your_public_key');
+     await MinfoSdk.initialize(publicApiKey: 'your_public_key', privateApiKey: 'your_private_key');
      
      runApp(MyApp());
    }
@@ -46,29 +48,18 @@ The SDK handles the complete AudioQR "connection" process:
 
 5. **Listen for campaigns**:
 ```dart
-// Listen to campaign detections
-MinfoSdk.instance.campaignStream?.listen((result) {
-  if (result.isSuccess) {
-    print('Campaign: ${result.campaignName}');
-    print('URL: ${result.campaignUrl}');
-    print('Description: ${result.campaignDescription}');
-    
-    // Handle your own UI
-    showCampaignDialog(result);
-    // or navigate to campaign page
-    Navigator.push(context, MaterialPageRoute(
-      builder: (_) => CampaignPage(campaign: result)
-    ));
-  } else {
-    print('Error: ${result.error}');
-  }
-});
-
-// Control listening
-await MinfoSdk.instance.listen();  // Start listening
-await MinfoSdk.instance.pause();   // Pause listening  
-await MinfoSdk.instance.listen();  // Resume listening
-await MinfoSdk.instance.stop();    // Stop completely
+// Start Scanning: The startScan method automatically handles runtime permission requests for both iOS and Android.
+MinfoSdk.instance.startScan(
+  onResult: (result) {
+      print('Detected: ${result.name}');
+// result contains all campaign info (image, url, colors, etc.)
+   },
+  onError: (error) {
+      print('Error: $error');
+   },
+);
+//Stop Scanning
+await MinfoSdk.instance.stop();
 ```
 
 ## 3. Campaign Data Structure
@@ -79,16 +70,19 @@ When a campaign is detected, you receive a `CampaignResult` object with:
 class CampaignResult {
   final int audioId;              // Detected audio ID
   final String? campaignUrl;      // Campaign URL
-  final String? campaignName;     // Campaign name
+  final String? name;     // Campaign name
   final String? campaignDescription; // Campaign description
-  final String? campaignImage;    // Campaign image URL
+  final String? image;    // Campaign image URL
   final Map<String, dynamic>? campaignData; // Full campaign data
   final Map<String, dynamic>? metadata;     // Additional metadata
   final DateTime timestamp;       // Detection timestamp
   final String? error;           // Error message if any
-  
+
   bool get isSuccess;            // True if campaign found
   bool get hasError;             // True if error occurred
+
+// Note: Additional fields may be available but not documented here
+// Check the actual implementation for complete field list
 }
 ```
 
@@ -96,7 +90,7 @@ class CampaignResult {
 
 The SDK relies on communication between Flutter and native engines:
 
-1. **Flutter** requests startup with `listen()`
+1. **Flutter** requests startup with `startScan()`
 2. **Native Engines** analyze audio stream
 3. **Minfo API** validates signal and returns campaign data
 4. **Your App** receives `CampaignResult` via stream and handles UI
