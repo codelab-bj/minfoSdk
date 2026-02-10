@@ -5,7 +5,7 @@ import 'package:minfo_sdk/minfo_sdk_method_channel.dart';
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
-  MethodChannelMinfoSdk platform = MethodChannelMinfoSdk();
+  MethodChannelMinfoSdk platform = MethodChannelMinfoSdk();  //
   const MethodChannel channel = MethodChannel('minfo_sdk');
 
   setUp(() {

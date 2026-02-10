@@ -1,7 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 import 'package:flutter/services.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:io';
+
 import 'api_client.dart';
 import 'minfo_auth.dart';
 import 'audio_qr_engine.dart';
@@ -26,24 +27,38 @@ class MinfoSdk {
 
   StreamSubscription? _internalSub;
   StreamController<CampaignResult>? _controller;
+  StreamController<String>? _soundcodeStreamController;
 
   MinfoSdk._internal() {
     _audioEngine = AudioQREngine(
       channel: _qrChannel,
       minfoChannel: _minfoChannel,
     );
-    // On attache le handler dès l'instanciation
+    _soundcodeStreamController = StreamController<String>.broadcast();
     _minfoChannel.setMethodCallHandler(_handleNativeEvents);
   }
 
-  // ---------- GETTER STREAM ----------
+  // ---------- GETTERS & STREAMS ----------
 
   Stream<CampaignResult> get campaignStream {
     _controller ??= StreamController<CampaignResult>.broadcast();
     return _controller!.stream;
   }
 
-  // ---------- INIT ----------
+  AudioQREngine get audioEngine => _audioEngine;
+
+  Stream<String> get soundcodeStream => _soundcodeStreamController!.stream;
+
+  // ---------- CONFIGURATION & LIFECYCLE ----------
+
+  void configureListener({
+    Function(String)? onSoundcodeDetected,
+    Function(Map<String, dynamic>)? onEvent,
+  }) {
+    if (onSoundcodeDetected != null) {
+      soundcodeStream.listen(onSoundcodeDetected);
+    }
+  }
 
   static Future<void> initialize({
     required String publicApiKey,
@@ -53,7 +68,15 @@ class MinfoSdk {
     await auth.storeApiKeys(publicApiKey, privateApiKey);
   }
 
-  // ---------- API PUBLIQUE ----------
+  void dispose() {
+    _internalSub?.cancel();
+    _controller?.close();
+    _soundcodeStreamController?.close();
+    _controller = null;
+    _soundcodeStreamController = null;
+  }
+
+  // ---------- MÉTHODES PUBLIQUES ----------
 
   Future<void> startScan({
     required Function(CampaignResult) onResult,
@@ -62,30 +85,16 @@ class MinfoSdk {
     if (_isListening) return;
 
     try {
-      // 1. GESTION INTELLIGENTE DES PERMISSIONS
-      // Sur iOS : Uniquement MICROPHONE
-      // Sur Android : MICROPHONE + PHONE
       List<Permission> permissionsToRequest = [Permission.microphone];
-
-      if (Platform.isAndroid) {
-        permissionsToRequest.add(Permission.phone);
-      }
+      if (Platform.isAndroid) permissionsToRequest.add(Permission.phone);
 
       Map<Permission, PermissionStatus> statuses = await permissionsToRequest.request();
 
-      // Vérification Microphone (Commun à tous)
       if (statuses[Permission.microphone] != PermissionStatus.granted) {
-        onError?.call("L'accès au microphone est indispensable pour scanner.");
+        onError?.call("L'accès au microphone est indispensable.");
         return;
       }
 
-      // Vérification Téléphone (Spécifique Android)
-      if (Platform.isAndroid && statuses[Permission.phone] != PermissionStatus.granted) {
-        onError?.call("Permission téléphone requise sur Android pour le moteur audio.");
-        return;
-      }
-
-      // 2. CONFIGURATION API
       final keys = await _auth.getStoredApiKeys();
       if (keys != null) {
         _apiClient.setExternalKeys(keys['public_key']!, keys['private_key']!);
@@ -94,26 +103,20 @@ class MinfoSdk {
         return;
       }
 
-      // 3. RÉINITIALISATION DES ÉTATS
       _isListening = true;
       _isProcessing = true;
       _hasDetected = false;
 
-      // 4. ÉCOUTE DU FLUX POUR L'UI
       await _internalSub?.cancel();
-      _internalSub = campaignStream.listen(
-            (result) => onResult(result),
-        onError: (e) => onError?.call(e.toString()),
-      );
+      _internalSub = campaignStream.listen(onResult, onError: (e) => onError?.call(e.toString()));
 
-      // 5. DÉMARRAGE NATIF
       await _minfoChannel.invokeMethod('startAudioCapture');
       _logger.info("🚀 Scan Minfo démarré");
 
     } catch (e) {
       _isListening = false;
       _isProcessing = false;
-      onError?.call("Erreur lors du démarrage : $e");
+      onError?.call("Erreur démarrage : $e");
     }
   }
 
@@ -130,36 +133,37 @@ class MinfoSdk {
       _audioEngine.stopDetection();
       _logger.info("⏹️ Scan Minfo arrêté");
     } catch (e) {
-      _logger.error("Erreur lors de l'arrêt : $e");
+      _logger.error("Erreur arrêt : $e");
     }
   }
 
-  // ---------- GESTIONNAIRE D'ÉVÉNEMENTS NATIFS ----------
+  /// ✅ AJOUTÉ : Méthode requise par vos widgets UI
+  Future<void> arreter() async {
+    await stop();
+  }
+
+  // ---------- NATIVE HANDLER ----------
 
   Future<void> _handleNativeEvents(MethodCall call) async {
     if (call.method != 'onDetectedId') return;
-
-    // On ignore si on ne scanne pas ou si on traite déjà un ID
     if (!_isListening || _hasDetected || !_isProcessing) return;
 
     final args = call.arguments as List<dynamic>;
     if (args.length < 2) return;
 
     final int audioId = args[1];
+    _soundcodeStreamController?.add(audioId.toString());
 
-    // Verrouillage immédiat pour éviter les appels API en boucle
     _hasDetected = true;
     _isProcessing = false;
 
     try {
-      _logger.info("🎯 Audio ID détecté nativement : $audioId. Récupération campagne...");
-
+      _logger.info("🎯 ID détecté : $audioId. Récupération campagne...");
       final data = await _apiClient.getCampaignData(audioId.toString());
 
       if (data == null) {
-        _logger.warning("⚠️ Aucune donnée pour l'ID $audioId");
         _hasDetected = false;
-        _isProcessing = true; // On déverrouille pour continuer à chercher
+        _isProcessing = true;
         return;
       }
 
@@ -170,14 +174,11 @@ class MinfoSdk {
         timestamp: DateTime.now(),
       );
 
-      // Envoi du résultat à l'UI via le Stream
       _controller?.add(result);
-
-      // On attend un peu pour que l'utilisateur voit l'info avant de couper le micro
       Future.delayed(const Duration(milliseconds: 500), () => stop());
 
     } catch (e) {
-      _logger.error("❌ Erreur API Minfo : $e");
+      _logger.error("❌ Erreur API : $e");
       _hasDetected = false;
       _isProcessing = true;
     }

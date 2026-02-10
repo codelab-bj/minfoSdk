@@ -1,51 +1,24 @@
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'utils.dart'; // Importe ton logger
 
 class MinfoAuth {
-  // Utilisation de FlutterSecureStorage pour crypter les clés sur le téléphone
-  static const _storage = FlutterSecureStorage();
+  final _storage = const FlutterSecureStorage();
+  final _logger = MinfoLogger();
 
-  // Clés utilisées pour le stockage interne
-  static const _keyPublic = 'minfo_cle_publique';
-  static const _keyPrivate = 'minfo_cle_privee';
+  Future<void> storeApiKeys(String public, String private) async {
+    await _storage.write(key: 'minfo_public_key', value: public);
+    await _storage.write(key: 'minfo_private_key', value: private);
+    _logger.info("Keys stored successfully");
+  }
 
-  /// Récupère les clés stockées.
-  /// Retourne null si l'une des deux clés est manquante.
   Future<Map<String, String>?> getStoredApiKeys() async {
-    try {
-      final publicKey = await _storage.read(key: _keyPublic);
-      final privateKey = await _storage.read(key: _keyPrivate);
+    final pub = await _storage.read(key: 'minfo_public_key');
+    final priv = await _storage.read(key: 'minfo_private_key');
 
-      if (publicKey != null && privateKey != null) {
-        return {
-          'public_key': publicKey,
-          'private_key': privateKey,
-        };
-      }
-    } catch (e) {
-      print('❌ [STORAGE] Erreur lors de la lecture des clés: $e');
+    if (pub == null || priv == null) {
+      _logger.warning("Attempted to retrieve keys but they are missing");
+      return null;
     }
-    return null;
-  }
-
-  /// Sauvegarde les clés transmises par le MinfoSdk.initialize
-  Future<void> storeApiKeys(String publicKey, String privateKey) async {
-    try {
-      await _storage.write(key: _keyPublic, value: publicKey);
-      await _storage.write(key: _keyPrivate, value: privateKey);
-      print('✅ [STORAGE] Clés API sauvegardées localement.');
-    } catch (e) {
-      print('❌ [STORAGE] Erreur lors de la sauvegarde: $e');
-    }
-  }
-
-  /// Supprime les clés (Utile pour une déconnexion ou un reset)
-  Future<void> clearKeys() async {
-    try {
-      await _storage.delete(key: _keyPublic);
-      await _storage.delete(key: _keyPrivate);
-      print('🗑️ [STORAGE] Clés API supprimées.');
-    } catch (e) {
-      print('❌ [STORAGE] Erreur lors de la suppression: $e');
-    }
+    return {'public_key': pub, 'private_key': priv};
   }
 }

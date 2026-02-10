@@ -28,7 +28,7 @@ class _MinfoDetectionButtonState extends State<MinfoDetectionButton> {
         });
         
         // Écouter les résultats
-        MinfoSdk.instance.soundcodeStream?.listen((soundcode) {
+        MinfoSdk.instance.soundcodeStream.listen((soundcode) {
           developer.log('🎯 Soundcode reçu: $soundcode');
           setState(() {
             _status = "✅ Signal détecté: $soundcode";

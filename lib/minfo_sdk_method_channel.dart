@@ -1,3 +1,8 @@
+import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
+
+
+
 // 1. Définis le canal avec le nom EXACT utilisé dans ton Swift
 final methodChannel = const MethodChannel('com.gzone.campaign/audioCapture');
 
