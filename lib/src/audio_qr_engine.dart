@@ -10,6 +10,7 @@
 import 'dart:async';
 import 'package:flutter/services.dart';
 import 'package:uuid/uuid.dart';
+import 'utils.dart';
 
 // MARK: - AudioQR Signal
 

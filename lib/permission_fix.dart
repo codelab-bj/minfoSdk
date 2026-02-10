@@ -1,41 +1,36 @@
 import 'package:permission_handler/permission_handler.dart';
-import 'dart:developer' as developer;
+import 'src/utils.dart'; // Utilise ton MinfoLogger ici aussi pour la cohérence
 
 class PermissionFix {
+  static final _logger = MinfoLogger();
+
   static Future<bool> requestMicrophonePermission() async {
-    developer.log('🎤 Début demande permission microphone');
-    
-    // Vérifier d'abord le statut actuel
+    _logger.info('🎤 Début demande permission microphone');
+
     final status = await Permission.microphone.status;
-    developer.log('🎤 Statut initial: $status');
-    
+    _logger.info('🎤 Statut initial: $status');
+
     if (status.isGranted) {
-      developer.log('🎤 ✅ Permission déjà accordée');
+      _logger.info('🎤 ✅ Permission déjà accordée');
       return true;
     }
-    
+
     if (status.isPermanentlyDenied) {
-      developer.log('🎤 ❌ Permission refusée définitivement - ouverture paramètres');
+      _logger.error('🎤 ❌ Permission refusée définitivement - ouverture paramètres');
       await openAppSettings();
       return false;
     }
-    
-    // Demander la permission
-    developer.log('🎤 📱 Demande de permission en cours...');
-    final result = await Permission.microphone.request();
-    developer.log('🎤 📱 Résultat demande: $result');
-    
-    // Attendre un délai pour iOS
-    developer.log('🎤 ⏳ Attente 500ms pour iOS...');
-    await Future.delayed(Duration(milliseconds: 500));
-    
-    // Vérifier à nouveau le statut après la demande
+
+    _logger.info('🎤 📱 Demande de permission en cours...');
+   // final result = await Permission.microphone.request();
+
+    // CORRECTION: Utilisation de const pour la performance
+    await Future.delayed(const Duration(milliseconds: 500));
+
     final finalStatus = await Permission.microphone.status;
-    developer.log('🎤 Statut final: $finalStatus');
-    
     final granted = finalStatus.isGranted;
-    developer.log('🎤 ${granted ? "✅ SUCCÈS" : "❌ ÉCHEC"} - Permission ${granted ? "accordée" : "refusée"}');
-    
+    _logger.info('🎤 ${granted ? "✅ SUCCÈS" : "❌ ÉCHEC"}');
+
     return granted;
   }
 }

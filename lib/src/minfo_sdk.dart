@@ -32,7 +32,7 @@ class MinfoSdk {
   MinfoSdk._internal() {
     _audioEngine = AudioQREngine(
       channel: _qrChannel,
-      minfoChannel: _minfoChannel,
+
     );
     _soundcodeStreamController = StreamController<String>.broadcast();
     _minfoChannel.setMethodCallHandler(_handleNativeEvents);

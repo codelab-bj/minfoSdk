@@ -6,7 +6,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   MethodChannelMinfoSdk platform = MethodChannelMinfoSdk();  //
-  const MethodChannel channel = MethodChannel('minfo_sdk');
+  final methodChannelMinfoSdk = MethodChannel('minfo_sdk');
 
   setUp(() {
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler(
