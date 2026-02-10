@@ -120,28 +120,23 @@ class NativeLibrariesUnavailableException extends AudioQRException {
 /// Fallback stubs are commented out to ensure native libraries are properly integrated.
 class AudioQREngine {
   final MethodChannel _channel;
-  final MethodChannel? _minfoChannel;
+  final _logger = MinfoLogger();
+  final _uuid = const Uuid();
 
-  String _version = '1.0.0-native'; // Changed from 'stub' to 'native'
+  String _version = '1.0.0-native';
   bool _isAvailable = false;
   bool _isDetecting = false;
   final List<AudioQRSignal> _queuedSignals = [];
-
-  final _uuid = const Uuid();
-
-  // Pour attendre les résultats du listener
   Completer<DetectionResult>? _detectionCompleter;
 
+  // Correction du constructeur (suppression du paramètre inutilisé minfoChannel)
   AudioQREngine({
     required MethodChannel channel,
-    MethodChannel? minfoChannel,
-  })  : _channel = channel,
-        _minfoChannel = minfoChannel;
+  }) : _channel = channel;
 
   String get version => _version;
   bool get isAvailable => _isAvailable;
 
-  /// Initialise the AudioQR engine.
   Future<bool> initialise() async {
     try {
       final result = await _channel.invokeMethod<Map>('initialise');
@@ -151,105 +146,61 @@ class AudioQREngine {
 
         if (!_isAvailable) {
           final error = result['error'] as String?;
-          print('❌ AudioQR engine unavailable: $error');
+          _logger.error('❌ AudioQR engine unavailable: $error');
         }
-
         return _isAvailable;
       }
       return false;
     } catch (e) {
-      print('❌ AudioQR engine initialisation failed: $e');
+      _logger.error('❌ AudioQR engine initialisation failed: $e');
       return false;
     }
   }
 
-  /// Start AudioQR detection.
-  /// Avec le système exact, les résultats arrivent via le listener onDetectedId
   Future<DetectionResult> startDetection() async {
-    print('🚀 [AUDIOQR] startDetection() appelé');
+    _logger.info('🚀 [AUDIOQR] startDetection() appelé');
 
     if (!_isAvailable) {
-      print('❌ [AUDIOQR] Moteur non initialisé');
+      _logger.error('❌ [AUDIOQR] Moteur non initialisé');
       return DetectionResult.failure(NotInitialisedException());
     }
 
     if (_isDetecting) {
-      print('⚠️ [AUDIOQR] Détection déjà en cours');
+      _logger.warning('⚠️ [AUDIOQR] Détection déjà en cours');
       return DetectionResult.failure(
           EngineFailureException('Detection already in progress'));
     }
 
-    // S'assurer que le listener est configuré (via MinfoSdk singleton)
-    try {
-      // Import dynamique pour éviter les dépendances circulaires
-      // On utilise une approche indirecte via le channel
-      print('🔧 [AUDIOQR] Vérification de la configuration du listener...');
-      // Le listener sera configuré automatiquement par MinfoSdk si nécessaire
-      // On peut aussi l'appeler directement si on a accès au SDK
-      print(
-          '💡 [AUDIOQR] INFO: Assurez-vous que MinfoSdk.instance.configureListener() a été appelé');
-    } catch (e) {
-      print('⚠️ [AUDIOQR] Impossible de vérifier le listener: $e');
-    }
-
-    print('✅ [AUDIOQR] Création du Completer pour attendre les résultats');
+    _logger.info('✅ [AUDIOQR] Création du Completer pour attendre les résultats');
     _isDetecting = true;
     _detectionCompleter = Completer<DetectionResult>();
 
     try {
-      print('📤 [AUDIOQR] Envoi de startDetection vers le natif...');
-      // Démarrer la détection (retourne null avec le système exact)
-      // Les résultats arriveront via handleDetectedId() appelé par minfo_sdk.dart
+      _logger.info('📤 [AUDIOQR] Envoi de startDetection vers le natif...');
       await _channel.invokeMethod('startDetection');
-      print(
-          '✅ [AUDIOQR] startDetection envoyé, attente des résultats via listener...');
-      print('💡 [AUDIOQR] INFO: En attente d\'un signal audio...');
-      print(
-          '💡 [AUDIOQR] INFO: Le listener natif écoute, un signal déclenchera onDetectedId');
-      print(
-          '💡 [AUDIOQR] INFO: Si aucun signal n\'arrive, vérifiez que le listener Flutter est configuré');
 
-      // Attendre les résultats via le callback (pas de timeout - comme dans le fichier de référence)
-      print(
-          '⏳ [AUDIOQR] En attente du Completer (attente infinie jusqu\'à détection)...');
-      final result = await _detectionCompleter!.future;
-      print('✅ [AUDIOQR] Résultat reçu du Completer');
-      return result;
+      _logger.info('⏳ En attente du signal audio via listener...');
+      return await _detectionCompleter!.future;
     } catch (e) {
-      print('❌ [AUDIOQR] Erreur dans startDetection: $e');
+      _logger.error('❌ [AUDIOQR] Erreur dans startDetection: $e');
       _isDetecting = false;
       _detectionCompleter = null;
 
-      // Gestion spécifique des erreurs de libs natives
-      if (e.toString().contains('LIBS_UNAVAILABLE') ||
-          e.toString().contains('FRAMEWORK_UNAVAILABLE')) {
-        return DetectionResult.failure(
-            NativeLibrariesUnavailableException(e.toString()));
+      if (e.toString().contains('LIBS_UNAVAILABLE')) {
+        return DetectionResult.failure(NativeLibrariesUnavailableException(e.toString()));
       }
-
       return DetectionResult.failure(EngineFailureException(e.toString()));
     }
   }
 
-  /// Gérer les détections reçues via onDetectedId
-  /// Appelé par minfo_sdk.dart quand il reçoit onDetectedId
-  /// Gérer les détections reçues via onDetectedId
   void handleDetectedId(List<dynamic> detectedData) {
-    print('📥 [AUDIOQR] handleDetectedId() appelé avec: $detectedData');
-
-    // 1. On vérifie d'abord si on a un completer en attente
-    if (_detectionCompleter == null || _detectionCompleter!.isCompleted) {
-      print('💡 [AUDIOQR] Info: ID reçu en mode passif (pas de Completer actif)');
-      // On ne s'arrête pas là, on continue pour traiter la donnée si besoin
-    }
+    _logger.info('📥 [AUDIOQR] handleDetectedId() reçu: $detectedData');
 
     try {
-      // Format exact du fichier de référence : [type, result[1], result[2], result[3]]
-      if (detectedData.length >= 2) { // Sécurité : au moins type et ID
+      if (detectedData.length >= 2) {
         final int audioId = detectedData[1] as int;
-        print('🎯 [AUDIOQR] AudioId extrait: $audioId');
+        _logger.info('🎯 [AUDIOQR] AudioId extrait: $audioId');
 
-        // Créer le signal
         final signal = AudioQRSignal(
           signature: audioId.toString(),
           confidence: 0.95,
@@ -259,47 +210,38 @@ class AudioQREngine {
 
         _isDetecting = false;
 
-        // 2. On complète le Future SI il existe
         if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
-          print('📤 [AUDIOQR] Complétion du Completer avec succès...');
+          _logger.info('📤 [AUDIOQR] Complétion du Future avec succès');
           _detectionCompleter!.complete(DetectionResult.success(signal));
           _detectionCompleter = null;
         }
       } else {
-        print('❌ [AUDIOQR] Format de données invalide (trop court)');
+        _logger.warning('❌ [AUDIOQR] Format de données invalide');
       }
     } catch (e) {
-      print('❌ [AUDIOQR] Erreur dans handleDetectedId: $e');
+      _logger.error('❌ [AUDIOQR] Erreur dans handleDetectedId: $e');
       _isDetecting = false;
       if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
-        _detectionCompleter!.complete(
-            DetectionResult.failure(EngineFailureException(e.toString())));
+        _detectionCompleter!.complete(DetectionResult.failure(EngineFailureException(e.toString())));
         _detectionCompleter = null;
       }
     }
   }
-  /// Stop any ongoing detection.
+
   void stopDetection() {
-    print('⏹️ [AUDIOQR] stopDetection() appelé');
+    _logger.info('⏹️ [AUDIOQR] stopDetection() appelé');
     _isDetecting = false;
     if (_detectionCompleter != null && !_detectionCompleter!.isCompleted) {
-      print('📤 [AUDIOQR] Complétion du Completer avec arrêt...');
-      _detectionCompleter!.complete(
-          DetectionResult.failure(EngineFailureException('Detection stopped')));
+      _detectionCompleter!.complete(DetectionResult.failure(EngineFailureException('Stopped')));
       _detectionCompleter = null;
-      print('✅ [AUDIOQR] Completer complété avec arrêt');
     }
     try {
-      print('📤 [AUDIOQR] Envoi de stopDetection vers le natif...');
       _channel.invokeMethod('stopDetection');
-      print('✅ [AUDIOQR] stopDetection envoyé');
     } catch (e) {
-      print('❌ [AUDIOQR] Erreur dans stopDetection: $e');
+      _logger.error('❌ Erreur stopDetection natif: $e');
     }
   }
 
-  /// Discard any queued signals.
-  /// Signals must not be persisted - they expire after 60 seconds.
   void discardQueuedSignals() {
     _queuedSignals.clear();
     try {
@@ -307,7 +249,6 @@ class AudioQREngine {
     } catch (_) {}
   }
 }
-
 /*
  * Native Platform Channel Implementation Reference:
  *

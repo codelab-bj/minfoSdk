@@ -1,7 +1,9 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'utils.dart';
 
 class MinfoApiClient {
+  final _logger = MinfoLogger();
   static const String _baseUrl = 'https://api.dev.minfo.com/api';
   String? _pubKey;
   String? _privKey;
@@ -13,7 +15,8 @@ class MinfoApiClient {
 
   Future<Map<String, dynamic>?> getCampaignData(String signature) async {
     if (_pubKey == null || _privKey == null) {
-      print('❌ [API] Clés non configurées');
+      _logger.error('❌ [API] Clés non configurées');
+
       return null;
     }
 
@@ -35,10 +38,10 @@ class MinfoApiClient {
       if (response.statusCode == 200) {
         return json.decode(response.body);
       } else {
-        print('❌ [API] Erreur ${response.statusCode}: ${response.body}');
+        _logger.error('❌ [API] Erreur ${response.statusCode}: ${response.body}');
       }
     } catch (e) {
-      print('❌ [API] Exception: $e');
+     _logger.error('❌ [API] Exception: $e');
     }
     return null;
   }

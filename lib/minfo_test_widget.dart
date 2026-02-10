@@ -54,7 +54,7 @@ class _MinfoTestWidgetState extends State<MinfoTestWidget> {
       MinfoSdk.instance.configureListener();
       
       // Écouter les résultats
-      MinfoSdk.instance.soundcodeStream?.listen((soundcode) {
+      MinfoSdk.instance.soundcodeStream.listen((soundcode) {
         developer.log('🧪 🎯 Signal détecté: $soundcode');
         setState(() {
           _status = "✅ Signal détecté: $soundcode";
